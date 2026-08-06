@@ -1,28 +1,31 @@
 import Foundation
-import PictKit
 
-/// What the editor says about one target: where its icon is coming from and, when
+/// What an app says about one target in a list: where its icon is coming from and, when
 /// it is the target's own, what shape that artwork is.
 ///
 /// Answering this needs the store and the bundle — not the resolver's cache — so it
 /// lives apart from `IconResolver`, which exists to keep a lookup to a dictionary
 /// hit. Describing a target *decodes* its icon, so this is deliberately blocking and
 /// deliberately off the main thread.
-struct IconArtworkStatus: Equatable {
+///
+/// In the package rather than in Pict because it has two consumers: Pict captions
+/// its rows with it, and so does Zap's Icons tab, which keeps its read-side list
+/// after handing editing over.
+public struct IconArtworkStatus: Equatable {
 
     /// The shape of the target's own artwork, or `nil` when none was readable.
-    var shape: IconShape?
+    public var shape: IconShape?
     /// Whether the user has supplied an icon for this target.
-    var hasCustomIcon: Bool
+    public var hasCustomIcon: Bool
     /// Whether this target is pinned to the system icon.
-    var isPinnedToSystemIcon: Bool
+    public var isPinnedToSystemIcon: Bool
     /// Who set the icon, when someone did — the one place a user can see that the
     /// icon in front of them arrived from another app.
-    var writtenBy: String?
+    public var writtenBy: String?
     /// The attribution an adopted icon carries, when it carries one.
-    var credit: String?
+    public var credit: String?
 
-    var label: String {
+    public var label: String {
         if isPinnedToSystemIcon { return "System icon" }
         if hasCustomIcon {
             var parts = ["Custom icon"]
@@ -34,13 +37,23 @@ struct IconArtworkStatus: Equatable {
         return shape.label
     }
 
+    public init(shape: IconShape? = nil, hasCustomIcon: Bool = false,
+                isPinnedToSystemIcon: Bool = false,
+                writtenBy: String? = nil, credit: String? = nil) {
+        self.shape = shape
+        self.hasCustomIcon = hasCustomIcon
+        self.isPinnedToSystemIcon = isPinnedToSystemIcon
+        self.writtenBy = writtenBy
+        self.credit = credit
+    }
+
     /// Where the queue for batch description lives. Utility rather than user
     /// initiated: nothing on screen is waiting on it except a caption.
     private static let queue = DispatchQueue(label: "com.pict.icon-status", qos: .utility)
 
     /// Describes one target. Decodes its bundle artwork, so it blocks — call it off
     /// the main thread.
-    static func describe(_ target: IconTarget, store: IconStore) -> IconArtworkStatus {
+    public static func describe(_ target: IconTarget, store: IconStore) -> IconArtworkStatus {
         if let entry = store.entry(for: target) {
             if entry.origin == .system {
                 return IconArtworkStatus(shape: nil, hasCustomIcon: false,
@@ -65,7 +78,7 @@ struct IconArtworkStatus: Equatable {
 
     /// Describes several targets off the main thread, calling `completion` back on
     /// it. Keyed by the serialised storage key, which is what rows are identified by.
-    static func load(for targets: [IconTarget], store: IconStore,
+    public static func load(for targets: [IconTarget], store: IconStore,
                      completion: @escaping ([String: IconArtworkStatus]) -> Void) {
         queue.async {
             var result: [String: IconArtworkStatus] = [:]
