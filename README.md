@@ -13,10 +13,10 @@ Give Safari a custom icon once and all three apps draw it.
 > models, working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
 
 > [!WARNING]
-> **Work in progress, and not yet compiled.** `PictKit` is written but has never
-> been through a Swift toolchain — it was authored in an environment without one.
-> Expect a first build to turn up real errors. The Pict app itself is not built yet.
-> See [Status](#status).
+> **Work in progress, and not yet compiled.** All of this was authored in an
+> environment with no Swift toolchain, so neither `PictKit` nor the app has ever
+> been through a compiler and no test has run. Expect a first build to turn up
+> real errors. See [Status](#status).
 
 ## Why this exists
 
@@ -97,11 +97,10 @@ provides.
 |---|---|
 | `PictKit` store, resolver, artwork, migration | written, **not compiled** |
 | `PictKitTests` | written, **not run** |
-| Pict app (editor, ingestion, themes, search) | not started |
-| Zap / Jetty / Top Drawer wired to `PictKit` | not started |
+| Pict app — editor, ingestion, SVG, themes, search, URL scheme | written, **not compiled** |
+| Zap / Jetty / Top Drawer wired to `PictKit` | in progress |
 
-Nothing here has been near a Mac yet. The three consuming apps are unchanged and
-keep working exactly as they do today.
+Nothing here has been near a Mac yet.
 
 ## Build
 

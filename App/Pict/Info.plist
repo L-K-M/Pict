@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  A real Info.plist rather than INFOPLIST_KEY_* build settings, which is a
+	  break from Zap, Jetty and Top Drawer's convention. CFBundleURLTypes is an
+	  array of dictionaries and those settings only carry scalars, so there is no
+	  way to declare a URL scheme without a file. Everything else is still
+	  generated — GENERATE_INFOPLIST_FILE stays on and merges into this.
+
+	  The scheme is how Zap, Jetty and Top Drawer hand an app over to be edited:
+
+	      pict://edit?target=app:/Applications/Safari.app
+
+	  They also use a bare `pict://` with NSWorkspace.urlForApplication(toOpen:)
+	  to find out whether Pict is installed *without* launching it, which is what
+	  decides between offering "Change this app's icon everywhere…" and "Get Pict…".
+	-->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.pict.Pict.edit</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>pict</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
