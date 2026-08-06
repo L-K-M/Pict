@@ -226,9 +226,37 @@ public final class IconStore {
 
     /// Drops every override and deletes every stored image. Leaves the directory and
     /// its README in place.
+    ///
+    /// **Prefer `removeAll(kinds:)`.** In a store four apps read, an unscoped reset
+    /// reaches further than the app offering it: Zap lists applications and cannot
+    /// draw a file or a link at all, so a "Reset All Icons" there that also deleted
+    /// Top Drawer's folder icons would destroy work the user cannot even see from
+    /// the button they pressed. This overload is right for Pict, which lists
+    /// everything, and for tests.
     public func removeAll() {
         let keys = Array(entries.keys)
         for key in keys { clear(for: key) }
+    }
+
+    /// Drops every override of the given kinds.
+    ///
+    /// The scoping rule is *if you do not list it, do not delete it*: an app resets
+    /// what it shows the user and nothing else. Zap passes the application kinds
+    /// because application rows are the whole of its list.
+    ///
+    /// Returns how many entries were removed, so the caller can say so before doing
+    /// it — a shared store makes "reset" a question worth asking out loud.
+    @discardableResult
+    public func removeAll(kinds: Set<IconEntryKey.Kind>) -> Int {
+        let keys = entries.keys.filter { kinds.contains($0.kind) }
+        for key in keys { clear(for: key) }
+        return keys.count
+    }
+
+    /// How many entries of the given kinds are stored — what a confirmation needs to
+    /// name before `removeAll(kinds:)` is called.
+    public func count(kinds: Set<IconEntryKey.Kind>) -> Int {
+        entries.keys.filter { kinds.contains($0.kind) }.count
     }
 
     // MARK: Private

@@ -238,6 +238,34 @@ final class IconStoreTests: XCTestCase {
         guard case .failure(.unkeyable) = result else { return XCTFail("\(result)") }
     }
 
+    /// The store is read by four apps, and an app must not delete what it never
+    /// showed. Zap lists applications; Top Drawer's folder and link icons are not
+    /// its to reset.
+    func testScopedRemoveAllSparesOtherKinds() {
+        let store = makeStore()
+        _ = store.setIcon(makeImage(), for: Self.safari)
+        _ = store.setIcon(makeImage(), for: .file(URL(fileURLWithPath: "/tmp/notes.txt")))
+        _ = store.setIcon(makeImage(), for: .link(URL(string: "https://example.com")!))
+        XCTAssertEqual(store.entries.count, 3)
+
+        XCTAssertEqual(store.count(kinds: [.app, .bundleID]), 1)
+        XCTAssertEqual(store.removeAll(kinds: [.app, .bundleID]), 1)
+
+        XCTAssertNil(store.entry(for: Self.safari))
+        XCTAssertEqual(store.entries.count, 2)
+        XCTAssertNotNil(store.entry(for: .file(URL(fileURLWithPath: "/tmp/notes.txt"))))
+        XCTAssertNotNil(store.entry(for: .link(URL(string: "https://example.com")!)))
+    }
+
+    func testScopedRemoveAllTakesBothApplicationKinds() {
+        let store = makeStore()
+        _ = store.setIcon(makeImage(), for: Self.safari)
+        _ = store.setIcon(makeImage(), for: .application(bundleURL: nil,
+                                                         bundleIdentifier: "com.apple.Notes"))
+        XCTAssertEqual(store.removeAll(kinds: [.app, .bundleID]), 2)
+        XCTAssertTrue(store.entries.isEmpty)
+    }
+
     func testRemoveAllLeavesNothingBehind() throws {
         let store = makeStore()
         _ = store.setIcon(makeImage(), for: Self.safari)
