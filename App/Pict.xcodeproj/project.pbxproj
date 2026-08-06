@@ -8,14 +8,27 @@
 
 /* Begin PBXBuildFile section */
 		BB0000000000000000000022 /* PictKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000021 /* PictKit */; };
+		BB0000000000000000000034 /* PictKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000033 /* PictKit */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		BB000000000000000000001A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BB0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB0000000000000000000008;
+			remoteInfo = Pict;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		BB0000000000000000000006 /* Pict.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pict.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB0000000000000000000007 /* PictTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PictTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BB0000000000000000000004 /* Pict */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Pict; sourceTree = "<group>"; };
+		BB0000000000000000000005 /* PictTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = PictTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -27,6 +40,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BB000000000000000000000E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB0000000000000000000034 /* PictKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -34,6 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0000000000000000000004 /* Pict */,
+				BB0000000000000000000005 /* PictTests */,
 				BB0000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -42,6 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0000000000000000000006 /* Pict.app */,
+				BB0000000000000000000007 /* PictTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -72,6 +95,30 @@
 			productReference = BB0000000000000000000006 /* Pict.app */;
 			productType = "com.apple.product-type.application";
 		};
+		BB0000000000000000000009 /* PictTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB0000000000000000000012 /* Build configuration list for PBXNativeTarget "PictTests" */;
+			buildPhases = (
+				BB000000000000000000000D /* Sources */,
+				BB000000000000000000000E /* Frameworks */,
+				BB000000000000000000000F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BB000000000000000000001B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BB0000000000000000000005 /* PictTests */,
+			);
+			name = PictTests;
+			packageProductDependencies = (
+				BB0000000000000000000033 /* PictKit */,
+			);
+			productName = PictTests;
+			productReference = BB0000000000000000000007 /* PictTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -84,6 +131,10 @@
 				TargetAttributes = {
 					BB0000000000000000000008 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					BB0000000000000000000009 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = BB0000000000000000000008;
 					};
 				};
 			};
@@ -104,12 +155,20 @@
 			projectRoot = "";
 			targets = (
 				BB0000000000000000000008 /* Pict */,
+				BB0000000000000000000009 /* PictTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		BB000000000000000000000C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB000000000000000000000F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -126,7 +185,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BB000000000000000000000D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BB000000000000000000001B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB0000000000000000000008 /* Pict */;
+			targetProxy = BB000000000000000000001A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		BB0000000000000000000013 /* Debug */ = {
@@ -290,6 +364,38 @@
 			};
 			name = Release;
 		};
+		BB0000000000000000000017 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pict.PictTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Pict.app/Contents/MacOS/Pict";
+			};
+			name = Debug;
+		};
+		BB0000000000000000000018 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pict.PictTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Pict.app/Contents/MacOS/Pict";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -311,6 +417,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		BB0000000000000000000012 /* Build configuration list for PBXNativeTarget "PictTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB0000000000000000000017 /* Debug */,
+				BB0000000000000000000018 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -322,6 +437,10 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		BB0000000000000000000021 /* PictKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PictKit;
+		};
+		BB0000000000000000000033 /* PictKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PictKit;
 		};

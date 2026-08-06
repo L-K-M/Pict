@@ -29,7 +29,7 @@ jobs:
         run: swift test -v
 
   build-app:
-    name: Build Pict.app
+    name: Build & Test Pict.app
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
         with:
           xcode-version: '16.2'
 
-      - name: Build
+      - name: Build & test
         # Unsigned, like the three sibling apps — see their CICD.md. Releases are
         # ad-hoc signed at packaging time, so CI needs no Apple credentials.
         run: |
@@ -47,7 +47,6 @@ jobs:
           xcodebuild \
             -project App/Pict.xcodeproj \
             -scheme Pict \
-            -configuration Debug \
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            test

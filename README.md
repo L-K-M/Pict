@@ -97,6 +97,7 @@ provides.
 |---|---|
 | `PictKit` store, resolver, artwork, migration | written, **not compiled** |
 | `PictKitTests` | written, **not run** |
+| `PictTests` (app: themes, search, ingestion, render cache) | written, **not run** |
 | Pict app — editor, ingestion, SVG, themes, search, URL scheme | written, **not compiled** |
 | Zap / Jetty / Top Drawer wired to `PictKit` | in progress |
 
