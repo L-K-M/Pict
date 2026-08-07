@@ -60,7 +60,7 @@ protocol IconSearchProvider {
     /// suggesting means searching, searching means sending, and §5.5 says nothing
     /// is sent until the user asks. A provider whose corpus is local has no such
     /// cost, so it overrides this.
-    func suggestions(appName: String, bundleIdentifier: String, limit: Int) async -> [IconSearchResult]
+    func suggestions(appName: String, bundleIdentifier: String?, limit: Int) async -> [IconSearchResult]
 
     /// Fetches the artwork bytes for one result, bounded the same way any other
     /// remote image is (§6.4).
@@ -70,7 +70,7 @@ protocol IconSearchProvider {
 extension IconSearchProvider {
     var requiresAPIKey: Bool { false }
 
-    func suggestions(appName: String, bundleIdentifier: String, limit: Int) async -> [IconSearchResult] {
+    func suggestions(appName: String, bundleIdentifier: String?, limit: Int) async -> [IconSearchResult] {
         []
     }
 }

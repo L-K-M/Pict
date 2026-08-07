@@ -35,7 +35,7 @@ enum IconSetAutoMatch {
 
     /// The icon this set would apply to an app, or `nil` when nothing reaches the
     /// bar. At most one — a bulk apply picks or it doesn't.
-    static func confidentMatch(appName: String, bundleIdentifier: String,
+    static func confidentMatch(appName: String, bundleIdentifier: String?,
                                in iconNames: Set<String>) -> String? {
         // `matches` is already ranked best-first, so only the head can qualify:
         // if it isn't confident, nothing behind it is either.

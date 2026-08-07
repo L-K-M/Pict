@@ -68,7 +68,7 @@ enum IconNameGuess {
     /// enough to be worth a look (`com.apple.Safari` → `safari`) and wrong in ways
     /// the ranking handles rather than the caller (`…slackmacgap` → `slackmacgap`,
     /// which matches nothing and costs nothing).
-    static func candidates(appName: String, bundleIdentifier: String) -> [String] {
+    static func candidates(appName: String, bundleIdentifier: String?) -> [String] {
         var seen = Set<String>()
         var out: [String] = []
         func add(_ candidate: String) {
@@ -91,7 +91,10 @@ enum IconNameGuess {
         // dot-component is `app`, every time, for every app. Suggesting whatever a
         // theme happens to call `app` for all of them is worse than suggesting
         // nothing, so the tail is taken only from something identifier-shaped.
-        if !bundleIdentifier.contains("/"),
+        // Optional because a row need not have one: a file, a link, and an app
+        // whose bundle won't open all reach here with nil, and the app name alone
+        // is still worth guessing from.
+        if let bundleIdentifier, !bundleIdentifier.contains("/"),
            let tail = bundleIdentifier.split(separator: ".").last {
             add(String(tail))
         }
@@ -104,7 +107,7 @@ enum IconNameGuess {
     ///
     /// `limit` bounds what the picker shows above the full set; the rest of the
     /// theme is still there to search.
-    static func matches(appName: String, bundleIdentifier: String,
+    static func matches(appName: String, bundleIdentifier: String?,
                         in iconNames: Set<String>, limit: Int = 12) -> [Match] {
         var best: [String: Confidence] = [:]
         func offer(_ iconName: String, _ confidence: Confidence) {
@@ -158,8 +161,10 @@ enum IconNameGuess {
     /// name genuinely differ rather than one being a normalisation of the other,
     /// and the list is meant to stay browsable rather than become a mapping of the
     /// App Store. The ranking handles everything else.
-    static func aliases(appName: String, bundleIdentifier: String) -> [String] {
-        if let byIdentifier = aliasesByBundleIdentifier[bundleIdentifier] { return byIdentifier }
+    static func aliases(appName: String, bundleIdentifier: String?) -> [String] {
+        if let byIdentifier = bundleIdentifier.flatMap({ aliasesByBundleIdentifier[$0] }) {
+            return byIdentifier
+        }
         return aliasesByName[normalised(appName)] ?? []
     }
 

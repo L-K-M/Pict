@@ -58,10 +58,13 @@ public enum IconImageValidator {
         /// never sees these bytes, so none of the cases above can describe them.
         case svgNotRendered(reason: String)
 
-        var message: String {
+        /// `public` because the alert that shows this is outside the package. It was
+        /// internal while this type lived in Zap and every reader was in the same
+        /// module; now Pict is the one that phrases the refusal to the user.
+        public var message: String {
             switch self {
             case .unreadable:
-                return "That file isn't an image Zap can read."
+                return "That file isn't an image Pict can read."
             case .fileTooLarge(let bytes):
                 return "That file is \(bytes / (1024 * 1024)) MB. The limit is \(Limits.maximumSourceBytes / (1024 * 1024)) MB."
             case .tooSmall(let width, let height):
@@ -73,7 +76,7 @@ public enum IconImageValidator {
             case .extremeAspectRatio:
                 return "That image is too far from square to sit in the icon row."
             case .notEncodable:
-                return "Zap couldn't convert that image to PNG."
+                return "Pict couldn't convert that image to PNG."
             case .svgNotRendered(let reason):
                 return reason
             }

@@ -397,7 +397,7 @@ struct IconSearchSheet: View {
                     isAdopting = false
                     guard generation == searchGeneration else { return }
                     if case .failure(let error) = fetched {
-                        problem = .fetchFailed(error.message, app: app)
+                        problem = .fetchFailed(error.message, row: row)
                     }
                 }
                 return
@@ -411,7 +411,7 @@ struct IconSearchSheet: View {
                 guard generation == searchGeneration else { return }
                 switch rendered {
                 case .failure(let rejection):
-                    problem = .rejected(rejection, app: app)
+                    problem = .rejected(rejection, row: row)
                 case .success(let image):
                     onAdopt(result, image)
                 }

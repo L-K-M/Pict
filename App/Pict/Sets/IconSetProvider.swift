@@ -38,7 +38,7 @@ struct IconSetProvider: IconSearchProvider {
     }
 
     /// The set's own guesses for an app, best first (`IconNameGuess`).
-    func suggestions(appName: String, bundleIdentifier: String, limit: Int) async -> [IconSearchResult] {
+    func suggestions(appName: String, bundleIdentifier: String?, limit: Int) async -> [IconSearchResult] {
         IconNameGuess.matches(appName: appName, bundleIdentifier: bundleIdentifier,
                               in: iconNames, limit: limit)
             .compactMap { result(forIconName: $0.iconName) }
