@@ -1,4 +1,5 @@
 import Foundation
+import PictKit
 
 /// Fetches image bytes for an icon dragged or pasted in from a browser
 /// (`PLAN.md §2`).

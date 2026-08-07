@@ -24,6 +24,13 @@ struct PictApp: App {
 /// close. The three utilities it serves are all `LSUIElement` agents, which is the
 /// right shape for something that is always there — and the wrong shape for an
 /// editor you visit twice a year.
+///
+/// `@MainActor` because it already is one: AppKit calls every method here on the
+/// main thread, and `IconEditorModel` is main-actor-isolated — it is an
+/// `ObservableObject` full of `@Published` state driving SwiftUI. Without the
+/// annotation the stored property below is a nonisolated context calling a
+/// main-actor initializer, which does not compile.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let model = IconEditorModel()

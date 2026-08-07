@@ -1,4 +1,5 @@
 import Foundation
+import PictKit
 
 /// Iconify's public API — ~300k icons across 200+ open sets, no key, no quota
 /// (`PLAN.md §2`).

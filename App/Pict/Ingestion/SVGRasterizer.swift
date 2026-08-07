@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import PictKit
 import WebKit
 
 /// Turns SVG markup into a bitmap, via an offscreen `WKWebView` (`PLAN.md §2`).

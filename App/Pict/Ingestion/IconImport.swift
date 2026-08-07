@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import PictKit
 
 /// The one door bytes the user supplied come through on their way to becoming an
 /// icon.

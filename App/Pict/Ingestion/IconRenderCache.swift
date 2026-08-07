@@ -1,6 +1,7 @@
 import CoreGraphics
 import CryptoKit
 import Foundation
+import PictKit
 
 /// Keeps rendered SVG on disk so the same markup is never rasterised twice.
 ///

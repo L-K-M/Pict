@@ -1,4 +1,5 @@
 import Foundation
+import PictKit
 
 /// One installed icon theme, as something the search sheet can search.
 ///
