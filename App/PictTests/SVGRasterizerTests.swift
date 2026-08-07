@@ -291,7 +291,7 @@ final class SVGRasterizerTests: XCTestCase {
 
     /// An opaque solid, standing in for one pass of a render.
     private func solid(_ red: UInt8, _ green: UInt8, _ blue: UInt8, side: Int = 8) -> CGImage? {
-        guard let context = IconRenderer.makeContext(width: side, height: side) else { return nil }
+        guard let context = IconBitmap.makeContext(width: side, height: side) else { return nil }
         context.setFillColor(red: CGFloat(red) / 255, green: CGFloat(green) / 255,
                              blue: CGFloat(blue) / 255, alpha: 1)
         context.fill(CGRect(x: 0, y: 0, width: side, height: side))
@@ -362,7 +362,7 @@ final class SVGRasterizerTests: XCTestCase {
     ///
     /// No flip is applied before `drawPDFPage`, and this asserts that's right: a
     /// bitmap context's user space is bottom-left too, and its first row in memory
-    /// is the image's top. The two conventions already agree. `IconRenderer` relies
+    /// is the image's top. The two conventions already agree. `IconBitmap` relies
     /// on the same round trip for every downsampled icon in the switcher, which is
     /// why those aren't upside-down either.
     func testInkAtTheTopOfThePageLandsAtTheTopOfTheBitmap() throws {
