@@ -17,6 +17,29 @@ public final class IconResolver {
 
     public let store: IconStore
 
+    /// Called on the main queue once artwork has actually landed in the cache.
+    ///
+    /// The reason this exists: `invalidate()` empties the cache and re-warms in the
+    /// background, so a consumer that redraws *at* the moment of invalidation reads a
+    /// miss and draws the system icon. One that then caches what it drew — Jetty's
+    /// dock does, with a five-minute TTL — would pin the squircle-masked fallback on
+    /// screen for five minutes, starting from the instant the user picked a new icon
+    /// in Pict. Redrawing on this instead is what makes a change visible rather than
+    /// merely eventual.
+    ///
+    /// Only fires when a resolve produced real artwork. A target that resolves to
+    /// "use the system icon" is already what the consumer is drawing, so there is
+    /// nothing to redraw for.
+    ///
+    /// Coalesced: re-warming two hundred targets calls this once per runloop hop,
+    /// not two hundred times.
+    public var onIconsResolved: (() -> Void)? {
+        get { lock.lock(); defer { lock.unlock() }; return _onIconsResolved }
+        set { lock.lock(); _onIconsResolved = newValue; lock.unlock() }
+    }
+    private var _onIconsResolved: (() -> Void)?
+    private var notifyScheduled = false
+
     private let queue = DispatchQueue(label: "com.pict.icon-resolver", qos: .utility)
     private let lock = NSLock()
 
@@ -116,6 +139,10 @@ public final class IconResolver {
     /// against the old options — a icon cached at 1× is the wrong picture once a 2×
     /// display arrives — so keeping it would be the bug. Callers must not add their
     /// own `invalidate()` after this; that drops the cache and re-warms it twice.
+    ///
+    /// A caller that caches the resolved image downstream should drop that cache from
+    /// `onIconsResolved`, not from here: at this point the re-render has only been
+    /// scheduled, so redrawing now caches the system icon it falls back to.
     public func update(_ options: IconRenderOptions) {
         lock.lock()
         let unchanged = options == self.options
@@ -145,8 +172,26 @@ public final class IconResolver {
             if generation == self.generation {
                 self.cache[target] = resolution
                 self.inFlight.remove(target)
+                if case .image = resolution { self.scheduleNotifyLocked() }
             }
             self.lock.unlock()
+        }
+    }
+
+    /// Schedules the one main-queue hop that tells consumers new artwork is readable.
+    /// Call with the lock held.
+    private func scheduleNotifyLocked() {
+        guard !notifyScheduled else { return }
+        notifyScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            // Cleared before the callback runs, so artwork landing *during* it
+            // schedules the next hop rather than being swallowed by this one.
+            self.notifyScheduled = false
+            let notify = self._onIconsResolved
+            self.lock.unlock()
+            notify?()
         }
     }
 

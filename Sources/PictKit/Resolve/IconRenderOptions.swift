@@ -60,8 +60,19 @@ public struct IconRenderOptions: Equatable, Sendable {
     /// Options for an app that draws icons at `pointSize` and wants no layout
     /// flourishes — a dock tile or a drawer slot, where the icon sits in a grid and
     /// bleeding into its neighbours is not the look.
+    ///
+    /// **`.originalPlusCustom`, not `.systemDefault`.** The mode is Zap's *preference*
+    /// — a switcher row the user can set back to plain system icons — and Jetty and
+    /// Top Drawer have no such preference to read. Inheriting the default here would
+    /// leave `usesCustomIcons` false for both, so an icon the user set in Pict would
+    /// never be read by either and the store would be shared in name only. Worse,
+    /// before macOS 26 `systemDefault` is `.system`, which switches the ladder off
+    /// entirely and makes the resolver answer `nil` for every target.
+    ///
+    /// An icon the user picked by hand is not a display flourish, and no OS version
+    /// makes it stop being their choice.
     public static func plain(pointSize: Double, scale: CGFloat) -> IconRenderOptions {
-        IconRenderOptions(mode: IconSourceMode.systemDefault,
+        IconRenderOptions(mode: .originalPlusCustom,
                           pixelSize: IconBitmap.pixelSize(forIconSize: pointSize, scale: scale),
                           scale: scale,
                           bleed: 0,
