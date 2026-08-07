@@ -96,6 +96,12 @@ public final class IconStoreWatcher {
         self.stream = nil
     }
 
+    /// **`onChange` is always called on the main queue.** FSEvents delivers on the
+    /// stream's own dispatch queue — a utility one, above — and this is the hop.
+    /// Callers therefore need no dispatch of their own, and adding one only delays
+    /// the invalidation by a runloop turn. The guarantee is stated here because the
+    /// apps that depend on it are in other modules and cannot see this hop.
+    ///
     /// `kFSEventStreamCreateFlagIgnoreSelf` drops this process's own writes, so an
     /// app that just set an icon doesn't invalidate its cache over its own change.
     /// It does not help with *another* process, which is the case this exists for.

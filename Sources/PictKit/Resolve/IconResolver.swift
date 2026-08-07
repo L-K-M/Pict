@@ -111,6 +111,11 @@ public final class IconResolver {
     ///
     /// Safe and cheap to call on every settings change: identical options are a
     /// comparison and a return, not a cache flush.
+    ///
+    /// **It invalidates for you when they differ.** Everything cached was rendered
+    /// against the old options — a icon cached at 1× is the wrong picture once a 2×
+    /// display arrives — so keeping it would be the bug. Callers must not add their
+    /// own `invalidate()` after this; that drops the cache and re-warms it twice.
     public func update(_ options: IconRenderOptions) {
         lock.lock()
         let unchanged = options == self.options
