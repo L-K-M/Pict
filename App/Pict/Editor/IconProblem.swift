@@ -86,6 +86,16 @@ struct IconProblem: Identifiable, Error {
                         + "Install it again from Icon Sets… No icons were changed.")
     }
 
+    /// An image taken from the web that was smaller than an icon wants.
+    ///
+    /// Reported *after* the icon is set, not instead of setting it — the picture was
+    /// valid and the user chose it, so refusing would be overruling them about their
+    /// own icon. This says the result may look soft and how to do better.
+    static func lowResolutionImage(_ reason: String, row: IconTargetRow) -> IconProblem {
+        IconProblem(title: "\(row.name)'s icon may look soft",
+                    message: reason)
+    }
+
     /// Results came back but not one of them would draw. Distinct from a failed
     /// search: the provider answered, so the fault is on Pict's side of the line.
     static func previewsUnavailable(provider: String) -> IconProblem {
