@@ -195,6 +195,12 @@ final class IconEditorModel: ObservableObject {
     /// The picked image is usually not the one worth having: in a results grid the
     /// pointer is over a thumbnail. `OriginalImageResolver` looks for the full-size
     /// original first, and the candidate records which of the two this is.
+    /// **Progress and de-duplication are the caller's**, unlike the ingestion paths
+    /// around it: this sets no `inFlight` caption and takes no `claim`, because the
+    /// browser shows its own spinner over the page and refuses a second pick while
+    /// one is in flight. A future second caller needs to bring both, or it will fetch
+    /// silently and race itself.
+    ///
     /// `row` is passed rather than read from `browsingWebRow`, so every failure can
     /// be phrased against the row it leaves unchanged without this needing a fallback
     /// for a state the caller cannot be in — the browser always knows which row it

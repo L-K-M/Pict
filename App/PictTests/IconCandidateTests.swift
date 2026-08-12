@@ -11,12 +11,16 @@ import XCTest
 /// right — that it notices what is wrong, and that noticing never becomes refusing.
 final class IconCandidateTests: XCTestCase {
 
-    private func image(_ width: Int, _ height: Int, opaque: Bool) -> CGImage {
+    private func image(_ width: Int, _ height: Int, opaque: Bool,
+                       empty: Bool = false) -> CGImage {
         let context = CGContext(data: nil, width: width, height: height,
                                 bitsPerComponent: 8, bytesPerRow: 0,
                                 space: CGColorSpaceCreateDeviceRGB(),
                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         let rect = CGRect(x: 0, y: 0, width: width, height: height)
+        // Nothing drawn at all: a fully transparent bitmap, which is what an
+        // unreadable or blank download decodes to.
+        if empty { return context.makeImage()! }
         context.setFillColor(red: 0.2, green: 0.6, blue: 0.9, alpha: 1)
         if opaque {
             context.fill(rect)                 // alpha covers everything: a rectangle
@@ -30,9 +34,10 @@ final class IconCandidateTests: XCTestCase {
 
     private func candidate(_ width: Int, _ height: Int,
                           opaque: Bool = false,
+                          empty: Bool = false,
                           isOriginal: Bool = true,
                           note: String? = nil) -> IconCandidate {
-        let bitmap = image(width, height, opaque: opaque)
+        let bitmap = image(width, height, opaque: opaque, empty: empty)
         let profile = IconShapeClassifier.profile(of: bitmap)
         return IconCandidate(
             image: bitmap,
@@ -64,6 +69,25 @@ final class IconCandidateTests: XCTestCase {
         let shaped = candidate(1024, 1024)
         XCTAssertTrue(shaped.hasUsefulTransparency, "classified \(shaped.shape)")
         XCTAssertFalse(texts(shaped).contains("No transparency"), texts(shaped))
+    }
+
+    /// The contradiction a review round caught: `!hasUsefulTransparency` is true for
+    /// `.empty` as well as `.fullBleed`, so an image with *no* artwork — which is
+    /// entirely transparent — was being told it would "appear as a rectangle".
+    /// Saying both of one image reads like Pict is guessing.
+    func testAnEmptyImageIsNotAlsoCalledARectangle() {
+        let blank = candidate(1024, 1024, empty: true)
+        XCTAssertEqual(blank.shape, .empty)
+        XCTAssertTrue(texts(blank).contains("can't find any artwork"), texts(blank))
+        XCTAssertFalse(texts(blank).contains("No transparency"), texts(blank))
+        XCTAssertFalse(texts(blank).contains("rectangle"), texts(blank))
+    }
+
+    /// The property itself is unchanged — an empty image genuinely has no *useful*
+    /// transparency, since there is nothing for the alpha to shape. Only the note it
+    /// used to drive was wrong.
+    func testAnEmptyImageStillHasNoUsefulTransparency() {
+        XCTAssertFalse(candidate(1024, 1024, empty: true).hasUsefulTransparency)
     }
 
     // MARK: Size
@@ -122,6 +146,7 @@ final class IconCandidateTests: XCTestCase {
     func testEveryCandidateCanStillBeUsed() {
         for sample in [candidate(64, 64, opaque: true),
                        candidate(1024, 128),
+                       candidate(1024, 1024, empty: true),
                        candidate(200, 200, isOriginal: false),
                        candidate(1024, 1024)] {
             XCTAssertFalse(sample.notes.isEmpty, "a candidate with nothing said about it")

@@ -88,7 +88,11 @@ struct IconCandidate: Identifiable {
                 text: resolverNote ?? "Taken from a preview image rather than the original."))
         }
 
-        if !hasUsefulTransparency {
+        // `shape == .fullBleed`, not `!hasUsefulTransparency`. The latter is also true
+        // for `.empty`, and an image with no artwork is *entirely* transparent — the
+        // opposite of a rectangle. Saying both of it, as this did, reads like Pict is
+        // guessing, which is the one impression a preview cannot afford to give.
+        if shape == .fullBleed {
             found.append(Note(
                 level: .warning,
                 text: "No transparency — this will appear as a rectangle rather than "

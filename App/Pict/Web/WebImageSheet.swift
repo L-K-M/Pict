@@ -78,8 +78,11 @@ struct WebImageSheet: View {
     private func pick(_ picked: PickedWebImage) {
         guard !isFetching, pending == nil else { return }
         isFetching = true
-        // `@MainActor` explicitly: this method is not isolated, so a bare `Task`
-        // would inherit nothing and mutate `@State` off the main actor.
+        // Pinned explicitly rather than relying on inherited isolation. Whether a
+        // bare `Task` here would already be main-actor depends on how the SDK
+        // annotates `View` — it has changed across versions, and `pick` is a plain
+        // method rather than a protocol requirement, so the answer is not obvious
+        // from this file. The closure mutates `@State`, so it is spelled out.
         Task { @MainActor in
             let result = await candidate(picked)
             isFetching = false
