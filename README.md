@@ -14,26 +14,16 @@ Give Safari a custom icon once and all three apps draw it.
 > LLM Disclosure: this code base was written by or with the help of large language
 > models, working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
 
-> [!WARNING]
-> **Work in progress.** `PictKit` and the app now build and their tests pass in CI,
-> but nothing here has been run on an actual Mac — CI proves it compiles, not that
-> an icon set in Pict visibly appears in the Dock. See [Status](#status).
+![Screenshot of the UI for picking an icon from an embedded web browser](screenshot.png)
 
 ## Why this exists
 
 Since macOS 26 (Tahoe) the system composites every app icon into one fixed
-superellipse. Artwork that predates Tahoe gets scaled down onto a grey plate and
-masked — the whole back catalogue of Mac icons, flattened.
+superellipse.
 
 Zap, Jetty and Top Drawer all draw their own icons, so none of them is obliged to
-show the masked version. Zap already doesn't. The problem was that its fix lived
-entirely inside Zap: change an icon there and Jetty's dock still showed the
-system's.
-
-Pict is that fix, moved somewhere all three can reach.
-
-The full research and the reasoning behind this design is in Zap's
-[`SHARED-ICONS.md`](https://github.com/L-K-M/Zap/blob/main/SHARED-ICONS.md).
+show the masked version. Pict allows you to pick an icon for an app once, and all
+three apps will show that icon for that app.
 
 ## What's in here
 
@@ -73,22 +63,6 @@ and the UI for all of it.
 (filtered to transparent backgrounds), Openverse or Wikimedia Commons, but the
 address field takes anything.
 
-This exists because Zap's research found every general image-search API dead,
-closing, or behind a card, and concluded that *"the search can happen where search
-is still free: the user's browser"*. It also names macOSicons the best corpus for
-this problem and then rejects it, because its API allows fifty requests a **month** —
-browsing the same site costs no key and has no quota.
-
-Picking a search result usually means picking a thumbnail, so Pict looks for the
-full-size original behind it first, and says so when it has to settle for the small
-one rather than quietly making a soft icon.
-
-Deliberately **not** in the package. Those parts are also the parts that decode
-untrusted images, stand up a `WKWebView` and spawn a subprocess — and Pict is the
-only one of the four apps that needs no Accessibility permission, so it is the only
-one that could ever be sandboxed. Keeping them here keeps them out of the app that
-holds the event tap.
-
 ## The store
 
 ```
@@ -107,19 +81,6 @@ last-writer-wins, every write is atomic, and the directory listing *is* the inde
 
 Deleting the folder is always safe — every app falls back to the icons macOS
 provides.
-
-## Status
-
-| | |
-|---|---|
-| `PictKit` store, resolver, artwork, migration | builds, tests pass in CI |
-| `PictKitTests` | passing |
-| `PictTests` (app: themes, search, ingestion, render cache) | passing |
-| Pict app — editor, ingestion, SVG, themes, search, URL scheme | builds, tests pass in CI |
-| Zap / Jetty / Top Drawer wired to `PictKit` | green, pull requests open |
-
-Still never launched: CI compiles it and runs the unit tests, which is not the same
-as anyone having watched an icon change on a real desktop.
 
 ## Build
 
