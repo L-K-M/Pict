@@ -218,6 +218,11 @@ def write_png(path, size, pixels):
         handle.write(png)
 
 
+def write_text(path, body):
+    with open(path, "w") as handle:
+        handle.write(body)
+
+
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     catalog = os.path.join(root, "App", "Pict", "Assets.xcassets")
@@ -261,11 +266,6 @@ def main():
     write_text(os.path.join(catalog, "Contents.json"),
                '{\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  }\n}\n')
     print("  Contents.json ×3")
-
-
-def write_text(path, body):
-    with open(path, "w") as handle:
-        handle.write(body)
 
 
 if __name__ == "__main__":
