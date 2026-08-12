@@ -7,10 +7,18 @@ import SwiftUI
 /// a card, and `§5.3` concluded that "the search can happen where search is still
 /// free: the user's browser". This is that conclusion with the browser moved inside,
 /// so taking the picture is a right-click rather than a drag between two apps.
+///
+/// Picking does not close the sheet. The candidate is fetched, decoded and shown
+/// **over** the page (`IconCandidateView`), and only committed if the user says so —
+/// because the question "is this actually a good icon?" is worth nothing once the
+/// results it would send you back to are gone.
 struct WebImageSheet: View {
 
     let row: IconTargetRow
-    var onPick: (PickedWebImage) -> Void
+    /// Fetch and decode without applying, so this can be previewed.
+    var candidate: (PickedWebImage) async -> Result<IconCandidate, IconProblem>
+    /// Apply one the user has looked at and accepted.
+    var onUse: (IconCandidate) -> Void
     var onCancel: () -> Void
 
     @State private var source: WebImageSource = .default
@@ -18,15 +26,68 @@ struct WebImageSheet: View {
     @State private var destination: URL = WebImageSource.default.url
     @StateObject private var navigator = WebNavigator()
 
+    @State private var pending: IconCandidate?
+    @State private var isFetching = false
+    /// A failure while fetching a pick. Shown here rather than on the window behind,
+    /// which is covered by this sheet — an alert nobody can see is worse than none.
+    @State private var failure: IconProblem?
+
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            WebImageBrowser(url: destination, onPick: onPick, navigator: navigator)
+            browser
             Divider()
             footer
         }
         .frame(minWidth: 720, idealWidth: 900, minHeight: 480, idealHeight: 620)
+        .alert(iconProblem: $failure)
+    }
+
+    private var browser: some View {
+        WebImageBrowser(url: destination, onPick: pick, navigator: navigator)
+            .overlay {
+                if isFetching {
+                    // Dim the page while fetching: the click has been taken, and a
+                    // page that still looks live invites a second right-click.
+                    ZStack {
+                        Color.black.opacity(0.28)
+                        ProgressView("Fetching the image…")
+                            .padding(20)
+                            .background(.regularMaterial,
+                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .transition(.opacity)
+                } else if let pending {
+                    ZStack {
+                        Color.black.opacity(0.28)
+                        IconCandidateView(
+                            candidate: pending,
+                            row: row,
+                            onUse: { onUse(pending) },
+                            // Just a dismissal. The page, the scroll position and the
+                            // search results are all still behind it, which is the
+                            // entire point of previewing here.
+                            onCancel: { self.pending = nil })
+                    }
+                    .transition(.opacity)
+                }
+            }
+    }
+
+    private func pick(_ picked: PickedWebImage) {
+        guard !isFetching, pending == nil else { return }
+        isFetching = true
+        // `@MainActor` explicitly: this method is not isolated, so a bare `Task`
+        // would inherit nothing and mutate `@State` off the main actor.
+        Task { @MainActor in
+            let result = await candidate(picked)
+            isFetching = false
+            switch result {
+            case .success(let found): pending = found
+            case .failure(let problem): failure = problem
+            }
+        }
     }
 
     // MARK: Chrome
@@ -54,22 +115,21 @@ struct WebImageSheet: View {
             Picker("", selection: Binding(get: { source },
                                           set: { chosen in
                                               source = chosen
-                                              // Switching source re-runs what was
-                                              // typed: changing where you are
-                                              // looking should not lose what you
-                                              // are looking for.
                                               destination = WebImageSource
                                                   .destination(for: typed, on: chosen) ?? chosen.url
                                           })) {
-                ForEach(WebImageSource.all) { candidate in
-                    Text(candidate.name).tag(candidate)
+                ForEach(WebImageSource.all) { option in
+                    Text(option.name).tag(option)
                 }
             }
             .labelsHidden()
             .frame(width: 170)
             .help(source.note)
 
-            TextField("Search, or type an address", text: $typed)
+            TextField(source.canSearchByURL
+                        ? "Search, or type an address"
+                        : "Type an address — \(source.name) has its own search box",
+                      text: $typed)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(go)
 
@@ -104,8 +164,8 @@ struct WebImageSheet: View {
         .padding(10)
     }
 
-    /// Empty input is not a no-op: it returns to the current source's starting page,
-    /// which is the natural "take me back to where I began" after wandering off.
+    /// Empty input returns to the current source's starting page, which is the
+    /// natural "take me back to where I began" after wandering off.
     private func go() {
         guard let url = WebImageSource.destination(for: typed, on: source) else { return }
         destination = url

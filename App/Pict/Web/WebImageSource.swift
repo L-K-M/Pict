@@ -23,6 +23,17 @@ struct WebImageSource: Identifiable, Hashable {
     /// One line under it: what this corpus is, so the choice is informed.
     let note: String
     let url: URL
+    /// Whether a search can be expressed as a URL at all.
+    ///
+    /// `false` for macOSicons, and that is a fact about the site rather than a gap
+    /// here. It is a single-page app whose search is not addressable: a first attempt
+    /// used `#/?search=<terms>` and the site put the literal string
+    /// `?search=acorn image editor` into its own search box, because it reads
+    /// everything after the hash as one term. Its documented API is a POST endpoint
+    /// behind a key, which is not a link. Rather than ship another guess, the field
+    /// stays an address bar there and the site's own search box — which is large and
+    /// central on its landing page — does the searching.
+    let canSearchByURL: Bool
 
     /// Best first. Order is the recommendation.
     static let all: [WebImageSource] = [
@@ -30,7 +41,8 @@ struct WebImageSource: Identifiable, Hashable {
             id: "macosicons",
             name: "macOSicons",
             note: "Community-drawn Mac app icons, already un-squircled",
-            url: URL(string: "https://macosicons.com/#/")!),
+            url: URL(string: "https://macosicons.com/")!,
+            canSearchByURL: false),
         WebImageSource(
             id: "google-images",
             name: "Google Images",
@@ -39,17 +51,20 @@ struct WebImageSource: Identifiable, Hashable {
             // calls it "the whole ballgame": it is what turns a page of opaque JPEG
             // screenshots into a page of alpha-channel PNGs, and it is the
             // machine-checkable form of "is this usable as an icon?".
-            url: URL(string: "https://www.google.com/search?q=icon&udm=2&tbs=ic:trans")!),
+            url: URL(string: "https://www.google.com/search?q=icon&udm=2&tbs=ic:trans")!,
+            canSearchByURL: true),
         WebImageSource(
             id: "openverse",
             name: "Openverse",
             note: "Openly licensed images, with the licence stated",
-            url: URL(string: "https://openverse.org/search/image?q=icon")!),
+            url: URL(string: "https://openverse.org/search/image?q=icon")!,
+            canSearchByURL: true),
         WebImageSource(
             id: "wikimedia",
             name: "Wikimedia Commons",
             note: "Free media — good for logos and marks",
-            url: URL(string: "https://commons.wikimedia.org/w/index.php?search=logo+svg")!),
+            url: URL(string: "https://commons.wikimedia.org/w/index.php?search=logo+svg")!,
+            canSearchByURL: true),
     ]
 
     static let `default` = all[0]
@@ -73,6 +88,9 @@ struct WebImageSource: Identifiable, Hashable {
            let url = URL(string: "https://\(trimmed)"), url.host != nil {
             return url
         }
+        // `nil` rather than the homepage when the source cannot search by URL: the
+        // caller leaves the page where it is, which is honest, instead of navigating
+        // somewhere that silently drops what was typed.
         return searchURL(for: trimmed, on: source)
     }
 
@@ -85,9 +103,9 @@ struct WebImageSource: Identifiable, Hashable {
         guard let escaped = query.addingPercentEncoding(
             withAllowedCharacters: .urlQueryAllowed) else { return nil }
 
+        guard source.canSearchByURL else { return nil }
+
         switch source.id {
-        case "macosicons":
-            return URL(string: "https://macosicons.com/#/?search=\(escaped)")
         case "google-images":
             // Keeps the transparency filter across searches — losing it on the
             // second query would make the first result set look like a fluke.
