@@ -35,6 +35,18 @@ struct IconsView: View {
                 },
                 onCancel: { model.searchingRow = nil })
         }
+        .sheet(item: $model.browsingWebRow) { row in
+            WebImageSheet(
+                row: row,
+                onPick: { picked in
+                    // Closes on the pick. The download continues in the row's
+                    // caption, so leaving the browser open would show a page the
+                    // user has finished with while the result lands behind it.
+                    model.browsingWebRow = nil
+                    model.adopt(picked, for: row)
+                },
+                onCancel: { model.browsingWebRow = nil })
+        }
         .sheet(isPresented: $model.managingSets) {
             IconSetsSheet(library: model.iconSets, onDone: {
                 model.managingSets = false
@@ -87,6 +99,7 @@ struct IconsView: View {
             isDropTarget: model.dropTarget == row.id,
             onChooseFile: { model.chooseFile(for: row) },
             onSearch: { model.searchingRow = row },
+            onBrowseWeb: { model.browsingWebRow = row },
             onUseOriginalArtwork: { model.useOriginalArtwork(for: row) },
             onUseSystemIcon: { model.useSystemIcon(for: row) },
             onDrop: { model.adopt($0, for: row) },

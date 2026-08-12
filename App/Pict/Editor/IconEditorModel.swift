@@ -28,6 +28,10 @@ final class IconEditorModel: ObservableObject {
     @Published var dropTarget: String?
     @Published var selection: String?
     @Published var searchingRow: IconTargetRow?
+    /// The row the web-image browser is open for, if any. Separate from
+    /// `searchingRow` rather than a mode of it: one is a provider's corpus behind a
+    /// query and the other is a browser, and they share no state.
+    @Published var browsingWebRow: IconTargetRow?
     @Published var managingSets = false
     @Published var applyingSet: IconSet?
     @Published var applyProgress = (done: 0, total: 0)
@@ -176,6 +180,54 @@ final class IconEditorModel: ObservableObject {
             }
         }
         // Accepted: the download is under way and the row says so.
+        return true
+    }
+
+    /// Takes on an image picked out of the web browser.
+    ///
+    /// The picked image is usually not the one worth having: in a results grid the
+    /// pointer is over a thumbnail. `OriginalImageResolver` looks for the full-size
+    /// original first and falls back to the thumbnail with a warning, so the user
+    /// gets the best available picture and is told when that isn't a good one —
+    /// rather than silently getting a soft icon and blaming Pict for it.
+    ///
+    /// Everything after the URL is decided is the *same* path a dragged link takes,
+    /// deliberately: one door for remote images, with one set of bounds and one
+    /// validator behind it.
+    @discardableResult
+    func adopt(_ picked: PickedWebImage, for row: IconTargetRow) -> Bool {
+        let resolution = OriginalImageResolver.resolve(picked)
+        guard RemoteIconFetcher.isFetchable(resolution.url) else {
+            problem = .unfetchableLink(row: row)
+            return false
+        }
+        guard claim(row, saying: resolution.isOriginal ? "Downloading…" : "Downloading thumbnail…")
+        else { return false }
+
+        let key = row.id
+        Task {
+            let fetched = await fetchedImage(from: resolution.url, for: row)
+            inFlight[key] = nil
+            switch fetched {
+            case .failure(let failure):
+                problem = failure
+            case .success(let image):
+                // The *page* is the credit, not the image file: a bare CDN address
+                // says nothing about where a picture came from or who made it, and
+                // the page is what the user could go back and check.
+                let written = store.setIcon(image, for: row.target, origin: .search,
+                                            provider: "web",
+                                            creditURL: (picked.pageURL ?? resolution.url).absoluteString)
+                apply(written, for: row)
+                // Only when the icon actually landed. `apply` reports a failed write
+                // through `problem`, and overwriting that with "this may look soft"
+                // would replace a real error with a cosmetic note about an icon that
+                // was never saved.
+                if case .success = written, let warning = resolution.warning {
+                    problem = .lowResolutionImage(warning, row: row)
+                }
+            }
+        }
         return true
     }
 

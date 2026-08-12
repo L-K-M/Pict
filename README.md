@@ -65,7 +65,23 @@ the less it changes the better.
 ### Pict — the editor
 
 Everything with exactly one consumer: picking and validating a file, rasterising
-SVG, downloading icon themes, searching providers, and the UI for all of it.
+SVG, downloading icon themes, searching providers, browsing the web for a picture,
+and the UI for all of it.
+
+**Get Image from the Web.** A browser inside Pict — right-click any image, choose
+*Use This Image*. It starts on [macOSicons](https://macosicons.com), Google Images
+(filtered to transparent backgrounds), Openverse or Wikimedia Commons, but the
+address field takes anything.
+
+This exists because Zap's research found every general image-search API dead,
+closing, or behind a card, and concluded that *"the search can happen where search
+is still free: the user's browser"*. It also names macOSicons the best corpus for
+this problem and then rejects it, because its API allows fifty requests a **month** —
+browsing the same site costs no key and has no quota.
+
+Picking a search result usually means picking a thumbnail, so Pict looks for the
+full-size original behind it first, and says so when it has to settle for the small
+one rather than quietly making a soft icon.
 
 Deliberately **not** in the package. Those parts are also the parts that decode
 untrusted images, stand up a `WKWebView` and spawn a subprocess — and Pict is the
