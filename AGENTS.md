@@ -23,10 +23,28 @@ The design and the reasoning behind it live in Zap's `SHARED-ICONS.md`.
 
 ## Build & Test
 
+The package:
+
 ```bash
 swift build
 swift test
 ```
+
+The app — note the project is under `App/`, not at the repo root (the root belongs
+to `Package.swift`, because a remote SwiftPM package must declare its manifest there):
+
+```bash
+xcodebuild -project App/Pict.xcodeproj -scheme Pict \
+  -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
+```
+
+Both suites matter and neither subsumes the other: building the app compiles
+`PictKit` but does not run `PictKitTests`, which is the half three other apps
+depend on. CI runs them as two jobs for that reason — see [`CICD.md`](CICD.md).
+
+`scripts/build.sh` and `scripts/release.sh` are thin stubs over the shared
+[release-tool](https://github.com/L-K-M/release-tool) engine, as in Zap, Jetty and
+Top Drawer. Releases are cut by tagging: `scripts/release.sh X.Y.Z --push`.
 
 ## The Two Halves, and Why
 

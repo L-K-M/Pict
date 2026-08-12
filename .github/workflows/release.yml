@@ -1,0 +1,155 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']        # e.g. v1.2.0
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # needed to create the GitHub Release
+
+env:
+  # Unlike the three sibling apps, the project is not at the repo root: the root
+  # holds `Package.swift`, because a remote SwiftPM package has to declare its
+  # manifest there for Zap, Jetty and Top Drawer to resolve it.
+  PROJECT: App/Pict.xcodeproj
+  SCHEME: Pict
+  APP_NAME: Pict
+
+jobs:
+  release:
+    name: Build & publish (unsigned)
+    runs-on: macos-14
+    timeout-minutes: 45   # don't let a wedged xcodebuild stall a release for 6h
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        # Must match ci.yml. A release built on a toolchain CI has never used is
+        # a build nobody has tested.
+        with:
+          xcode-version: '16.2'
+
+      - name: Install tooling
+        run: brew install xcbeautify create-dmg
+
+      - name: Version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      # Gate the release on the tests. With no signing or notarization downstream,
+      # they are the only automated quality check, and a v* tag can land on any
+      # commit — including one CI never saw.
+      #
+      # Both suites, because they are separate: building the app compiles PictKit
+      # (a local package reference) but does not run `PictKitTests`, and PictKit is
+      # the half that three other apps depend on. A release that ships a broken
+      # store would break them at their next package resolution, not just Pict.
+      - name: Test PictKit
+        run: swift test
+
+      - name: Test the app
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project "$PROJECT" -scheme "$SCHEME" \
+            -destination 'platform=macOS' \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO | xcbeautify
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReleaseTestResults
+          path: TestResults.xcresult
+          if-no-files-found: ignore
+
+      - name: Build (Release, no Developer ID signing)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -destination 'generic/platform=macOS' \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGNING_ALLOWED=NO | xcbeautify
+
+      - name: Locate & ad-hoc sign the app
+        run: |
+          APP=$(find "$RUNNER_TEMP/DerivedData/Build/Products/Release" -maxdepth 1 -name "$APP_NAME.app" -print -quit)
+          [ -n "$APP" ] || { echo "::error::built $APP_NAME.app not found"; exit 1; }
+
+          # Ad-hoc sign (identity "-"): no certificate, keychain or API key needed,
+          # but it IS required for the app to launch on Apple Silicon. This is not a
+          # Developer ID signature and the app is not notarized — Gatekeeper still warns.
+          #
+          # Signed inside-out rather than with `--deep`, which Apple deprecates for
+          # signing. Pict is the only one of the four with a SwiftPM dependency in its
+          # own build: a library product normally links statically and leaves nothing
+          # nested, but if PictKit is ever built as a dynamic framework it lands in
+          # Contents/Frameworks and must be signed before the bundle enclosing it.
+          # The loop is a no-op in the static case.
+          if [ -d "$APP/Contents/Frameworks" ]; then
+            find "$APP/Contents/Frameworks" -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) -print0 |
+              while IFS= read -r -d '' nested; do
+                echo "signing nested: $nested"
+                codesign --force --sign - "$nested"
+              done
+          fi
+          codesign --force --sign - "$APP"
+
+          # Deep *verification* is not deprecated, and this is the check that would
+          # catch an unsigned nested binary — the failure mode being a download that
+          # simply refuses to launch, which no test upstream can detect.
+          codesign --verify --deep --strict "$APP" \
+            || { echo "::error::the signed app failed verification — it would not launch"; exit 1; }
+
+          echo "APP_PATH=$APP" >> "$GITHUB_ENV"
+
+      - name: Package zip + DMG
+        run: |
+          ZIP="$RUNNER_TEMP/$APP_NAME-$VERSION.zip"
+          DMG="$RUNNER_TEMP/$APP_NAME-$VERSION.dmg"
+          ditto -c -k --keepParent "$APP_PATH" "$ZIP"
+          # create-dmg can exit non-zero on a headless runner even on success — verify the file.
+          create-dmg \
+            --volname "$APP_NAME $VERSION" \
+            --window-size 540 380 \
+            --icon-size 100 \
+            --icon "$APP_NAME.app" 150 185 \
+            --app-drop-link 390 185 \
+            "$DMG" "$APP_PATH" || true
+          [ -f "$DMG" ] || { echo "::error::DMG was not created"; exit 1; }
+          # create-dmg's exit code is unreliable, so verify the image itself: a
+          # truncated/corrupt DMG must not ship as the release's preferred asset.
+          hdiutil verify "$DMG" || { echo "::error::DMG failed hdiutil verification — the image is corrupt or truncated"; exit 1; }
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "DMG=$DMG" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ env.APP_NAME }} ${{ env.VERSION }}
+          files: |
+            ${{ env.DMG }}
+            ${{ env.ZIP }}
+          # A pre-release tag (contains a hyphen, e.g. v1.1.0-beta.1) is marked as a
+          # prerelease and is not made "latest". Pict has no in-app updater of its own —
+          # the reason the sibling repos give — but the three apps that link PictKit
+          # point users here from their "Get Pict" buttons, and `releases/latest` is
+          # what a person following one of those lands on. A beta should not be it.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          body: |
+            ### Unsigned build
+
+            This app is **not** code-signed with a Developer ID or notarized, so macOS
+            Gatekeeper will warn on first launch. To open it:
+
+            - **Right-click** (or Control-click) the app → **Open** → **Open**, or
+            - run `xattr -dr com.apple.quarantine /Applications/${{ env.APP_NAME }}.app`

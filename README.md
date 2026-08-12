@@ -8,15 +8,16 @@ editor that fills it.
 
 Give Safari a custom icon once and all three apps draw it.
 
+**Latest release:** v<!-- version -->1.0.0<!-- /version --> · [Download](https://github.com/L-K-M/Pict/releases/latest)
+
 > [!IMPORTANT]
 > LLM Disclosure: this code base was written by or with the help of large language
 > models, working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
 
 > [!WARNING]
-> **Work in progress, and not yet compiled.** All of this was authored in an
-> environment with no Swift toolchain, so neither `PictKit` nor the app has ever
-> been through a compiler and no test has run. Expect a first build to turn up
-> real errors. See [Status](#status).
+> **Work in progress.** `PictKit` and the app now build and their tests pass in CI,
+> but nothing here has been run on an actual Mac — CI proves it compiles, not that
+> an icon set in Pict visibly appears in the Dock. See [Status](#status).
 
 ## Why this exists
 
@@ -95,22 +96,52 @@ provides.
 
 | | |
 |---|---|
-| `PictKit` store, resolver, artwork, migration | written, **not compiled** |
-| `PictKitTests` | written, **not run** |
-| `PictTests` (app: themes, search, ingestion, render cache) | written, **not run** |
-| Pict app — editor, ingestion, SVG, themes, search, URL scheme | written, **not compiled** |
-| Zap / Jetty / Top Drawer wired to `PictKit` | in progress |
+| `PictKit` store, resolver, artwork, migration | builds, tests pass in CI |
+| `PictKitTests` | passing |
+| `PictTests` (app: themes, search, ingestion, render cache) | passing |
+| Pict app — editor, ingestion, SVG, themes, search, URL scheme | builds, tests pass in CI |
+| Zap / Jetty / Top Drawer wired to `PictKit` | green, pull requests open |
 
-Nothing here has been near a Mac yet.
+Still never launched: CI compiles it and runs the unit tests, which is not the same
+as anyone having watched an icon change on a real desktop.
 
 ## Build
+
+The package, which is all you need to work on the read path:
 
 ```bash
 swift build
 swift test
 ```
 
-Requires macOS 13+ and a Swift 5.9 toolchain.
+The app:
+
+```bash
+scripts/build.sh           # Release build, revealed in Finder
+scripts/build.sh --debug --run
+```
+
+`build.sh` is a thin stub over the shared [release-tool](https://github.com/L-K-M/release-tool)
+engine, as in Zap, Jetty and Top Drawer — clone that repo and run `./install.sh`
+once. Or drive Xcode directly, which is what CI does:
+
+```bash
+xcodebuild -project App/Pict.xcodeproj -scheme Pict \
+  -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
+```
+
+Requires macOS 13+ and a Swift 5.9 toolchain; CI pins Xcode 16.2.
+
+## Releases
+
+```bash
+scripts/release.sh 1.1.0 --push
+```
+
+That bumps `MARKETING_VERSION` and the version line above, commits, tags `v1.1.0`
+and pushes — which triggers CI to build, package a `.zip` and `.dmg`, and publish
+the GitHub Release. See [`CICD.md`](CICD.md) for what runs when, and why the
+builds are unsigned.
 
 ## License
 
