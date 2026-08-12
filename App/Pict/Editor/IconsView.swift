@@ -38,12 +38,13 @@ struct IconsView: View {
         .sheet(item: $model.browsingWebRow) { row in
             WebImageSheet(
                 row: row,
-                onPick: { picked in
-                    // Closes on the pick. The download continues in the row's
-                    // caption, so leaving the browser open would show a page the
-                    // user has finished with while the result lands behind it.
+                // Fetch and decode only. The sheet previews the result over the page
+                // and closes on acceptance, so a picture that turns out to be wrong
+                // costs a dismissal rather than finding the search again.
+                candidate: { await model.candidate(for: $0, row: row) },
+                onUse: { candidate in
                     model.browsingWebRow = nil
-                    model.adopt(picked, for: row)
+                    model.commit(candidate, for: row)
                 },
                 onCancel: { model.browsingWebRow = nil })
         }

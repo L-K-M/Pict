@@ -86,12 +86,53 @@ final class WebImageSourceTests: XCTestCase {
         }
     }
 
-    func testEverySourceCanSearch() throws {
-        for source in WebImageSource.all {
+    func testEverySourceThatClaimsToSearchCanSearch() throws {
+        for source in WebImageSource.all where source.canSearchByURL {
             let url = try XCTUnwrap(WebImageSource.searchURL(for: "safari", on: source),
-                                    "\(source.id) can't search")
+                                    "\(source.id) claims to search by URL but returns nil")
             XCTAssertNotNil(url.host)
         }
+    }
+
+    // MARK: The source whose search is not a URL
+
+    /// macOSicons is a single-page app whose search is not addressable. The first
+    /// attempt used `#/?search=<terms>` and the site put the literal string
+    /// `?search=acorn image editor` into its own search box, because it reads
+    /// everything after the hash as one term. Rather than ship another guess, the
+    /// source declares it cannot search and the field stays an address bar.
+    func testMacOSIconsDoesNotClaimToSearchByURL() {
+        XCTAssertFalse(WebImageSource.default.canSearchByURL)
+        XCTAssertNil(WebImageSource.searchURL(for: "acorn", on: WebImageSource.default))
+    }
+
+    /// Its starting URL carries no hash route either — that was the other half of the
+    /// same mistake.
+    func testMacOSIconsStartsOnAPlainURL() {
+        XCTAssertFalse(WebImageSource.default.url.absoluteString.contains("#"),
+                       WebImageSource.default.url.absoluteString)
+    }
+
+    /// A typed query on a source that cannot search returns nil, so the caller leaves
+    /// the page where it is. Navigating to a homepage that silently drops what was
+    /// typed would look like the search ran and found nothing.
+    func testAQueryOnANonSearchingSourceGoesNowhere() {
+        XCTAssertNil(WebImageSource.destination(for: "acorn image editor",
+                                                on: WebImageSource.default))
+    }
+
+    /// An *address* still works there — the field is an address bar, and that is the
+    /// whole reason typing is still allowed.
+    func testAnAddressStillWorksOnANonSearchingSource() throws {
+        let url = try XCTUnwrap(WebImageSource.destination(
+            for: "https://macosicons.com/icon/acorn", on: WebImageSource.default))
+        XCTAssertEqual(url.path, "/icon/acorn")
+    }
+
+    /// And an empty field goes home, which is the "take me back" gesture.
+    func testEmptyInputOnANonSearchingSourceGoesHome() {
+        XCTAssertEqual(WebImageSource.destination(for: "", on: WebImageSource.default),
+                       WebImageSource.default.url)
     }
 
     func testSourceIdentifiersAreUnique() {

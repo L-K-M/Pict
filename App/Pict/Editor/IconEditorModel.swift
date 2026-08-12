@@ -183,52 +183,63 @@ final class IconEditorModel: ObservableObject {
         return true
     }
 
-    /// Takes on an image picked out of the web browser.
+    /// Fetches and decodes a web pick **without applying it**, so the browser can
+    /// show it before anything is written.
+    ///
+    /// This used to fetch and store in one step, then raise an alert if the picture
+    /// turned out to be too small — by which point the browser had closed, so acting
+    /// on the warning meant finding the page again. Splitting the fetch from the
+    /// commit is what lets the question be asked while the results are still on
+    /// screen. See `IconCandidate`.
     ///
     /// The picked image is usually not the one worth having: in a results grid the
     /// pointer is over a thumbnail. `OriginalImageResolver` looks for the full-size
-    /// original first and falls back to the thumbnail with a warning, so the user
-    /// gets the best available picture and is told when that isn't a good one —
-    /// rather than silently getting a soft icon and blaming Pict for it.
+    /// original first, and the candidate records which of the two this is.
+    /// **Progress and de-duplication are the caller's**, unlike the ingestion paths
+    /// around it: this sets no `inFlight` caption and takes no `claim`, because the
+    /// browser shows its own spinner over the page and refuses a second pick while
+    /// one is in flight. A future second caller needs to bring both, or it will fetch
+    /// silently and race itself.
     ///
-    /// Everything after the URL is decided is the *same* path a dragged link takes,
-    /// deliberately: one door for remote images, with one set of bounds and one
-    /// validator behind it.
-    @discardableResult
-    func adopt(_ picked: PickedWebImage, for row: IconTargetRow) -> Bool {
+    /// `row` is passed rather than read from `browsingWebRow`, so every failure can
+    /// be phrased against the row it leaves unchanged without this needing a fallback
+    /// for a state the caller cannot be in — the browser always knows which row it
+    /// was opened for.
+    func candidate(for picked: PickedWebImage,
+                   row: IconTargetRow) async -> Result<IconCandidate, IconProblem> {
         let resolution = OriginalImageResolver.resolve(picked)
         guard RemoteIconFetcher.isFetchable(resolution.url) else {
-            problem = .unfetchableLink(row: row)
-            return false
+            return .failure(.unfetchableLink(row: row))
         }
-        guard claim(row, saying: resolution.isOriginal ? "Downloading…" : "Downloading thumbnail…")
-        else { return false }
 
-        let key = row.id
-        Task {
-            let fetched = await fetchedImage(from: resolution.url, for: row)
-            inFlight[key] = nil
-            switch fetched {
-            case .failure(let failure):
-                problem = failure
-            case .success(let image):
-                // The *page* is the credit, not the image file: a bare CDN address
-                // says nothing about where a picture came from or who made it, and
-                // the page is what the user could go back and check.
-                let written = store.setIcon(image, for: row.target, origin: .search,
-                                            provider: "web",
-                                            creditURL: (picked.pageURL ?? resolution.url).absoluteString)
-                apply(written, for: row)
-                // Only when the icon actually landed. `apply` reports a failed write
-                // through `problem`, and overwriting that with "this may look soft"
-                // would replace a real error with a cosmetic note about an icon that
-                // was never saved.
-                if case .success = written, let warning = resolution.warning {
-                    problem = .lowResolutionImage(warning, row: row)
-                }
-            }
+        switch await fetchedImage(from: resolution.url, for: row) {
+        case .failure(let failure):
+            return .failure(failure)
+        case .success(let image):
+            let profile = IconShapeClassifier.profile(of: image)
+            return .success(IconCandidate(
+                image: image,
+                picked: picked,
+                fetchedURL: resolution.url,
+                isOriginal: resolution.isOriginal,
+                resolverNote: resolution.warning,
+                shape: profile.map { IconShapeClassifier.classify($0) } ?? .empty))
         }
-        return true
+    }
+
+    /// Writes a candidate the user has looked at and accepted.
+    ///
+    /// No download and no validation: both already happened to produce the preview,
+    /// and the image stored is the one that was shown. Re-fetching here would risk
+    /// storing something other than what the user approved.
+    func commit(_ candidate: IconCandidate, for row: IconTargetRow) {
+        // The *page* is the credit, not the image file: a bare CDN address says
+        // nothing about where a picture came from or who made it, and the page is
+        // what someone could go back and check.
+        let credit = (candidate.picked.pageURL ?? candidate.fetchedURL).absoluteString
+        apply(store.setIcon(candidate.image, for: row.target, origin: .search,
+                            provider: "web", creditURL: credit),
+              for: row)
     }
 
     /// Downloads `url` and decodes what comes back. Both halves can fail and they
