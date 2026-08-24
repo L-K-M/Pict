@@ -23,9 +23,14 @@ public struct PixelImage: Equatable, Sendable {
     public let samples: [UInt8]
 
     /// Builds an image from raw samples, or `nil` when the count doesn't match the
-    /// dimensions.
+    /// dimensions. The overflow check runs before `width * height * 4` is evaluated:
+    /// this initializer is the seam LP-04's PNG codec feeds with dimensions parsed
+    /// from untrusted file headers, and Swift traps (not wraps) on `Int` overflow —
+    /// so extreme dimensions must return `nil`, never crash.
     public init?(width: Int, height: Int, samples: [UInt8]) {
-        guard width > 0, height > 0, samples.count == width * height * 4 else { return nil }
+        guard width > 0, height > 0,
+              width <= (Int.max / 4) / height,
+              samples.count == width * height * 4 else { return nil }
         self.width = width
         self.height = height
         self.samples = samples

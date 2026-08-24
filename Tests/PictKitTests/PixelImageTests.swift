@@ -37,6 +37,13 @@ final class PixelImageTests: XCTestCase {
         XCTAssertNil(PixelImage(width: 0, height: 4, samples: []))
     }
 
+    /// Extreme dimensions (as a crafted PNG header could carry) must return nil,
+    /// not trap on the `width * height * 4` overflow. 2^31 × 2^31 × 4 = 2^64,
+    /// which overflows Int; the guard catches it before the multiply.
+    func testPixelImageRejectsOverflowingDimensions() {
+        XCTAssertNil(PixelImage(width: 1 << 31, height: 1 << 31, samples: []))
+    }
+
     #if canImport(CoreGraphics)
 
     // MARK: The Core Graphics bridge (macOS)
@@ -94,6 +101,19 @@ final class PixelImageTests: XCTestCase {
                            IconShapeClassifier.classify(pixel),
                            "CG and PixelImage classification must agree")
         }
+    }
+
+    /// Both sampling paths must agree on grid dimensions for *any* aspect ratio —
+    /// the square fixtures above exercise the rounding only trivially. 61/130*48
+    /// rounds to 23, and a one-cell drift between the CG and pure paths would skew
+    /// AlphaProfile only for non-square artwork.
+    func testGridDimensionsAgreeAcrossTheSeam() throws {
+        let image = IconTestSupport.makeImage(width: 130, height: 61, filled: true)
+        let pixel = try XCTUnwrap(PixelImage(cgImage: image))
+        let viaCG = try XCTUnwrap(AlphaMask(image: image, longestEdge: 48))
+        let viaPixel = try XCTUnwrap(AlphaMask(pixelImage: pixel, longestEdge: 48))
+        XCTAssertEqual(viaCG.width, viaPixel.width)
+        XCTAssertEqual(viaCG.height, viaPixel.height)
     }
     #endif
 }
