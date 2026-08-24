@@ -105,8 +105,13 @@ extension PixelImage {
         let y0 = Swift.min(Swift.max(y, 0), height)
         let x1 = Swift.min(Swift.max(x + cropWidth, 0), width)
         let y1 = Swift.min(Swift.max(y + cropHeight, 0), height)
-        let w = Swift.max(1, x1 - x0)
-        let h = Swift.max(1, y1 - y0)
+        let w = x1 - x0
+        let h = y1 - y0
+        // An empty intersection (the rect lies fully outside the image) would
+        // otherwise force `Swift.max(1, …)` into a 1-pixel read whose source index
+        // starts past the sample buffer. Not reachable from `normalize` — the
+        // ink-bounds crop is always non-empty — but `cropped` is a general helper.
+        guard w > 0, h > 0 else { return PixelImage(width: 1, height: 1, samples: [0, 0, 0, 0])! }
         var out = [UInt8](repeating: 0, count: w * h * 4)
         samples.withUnsafeBufferPointer { src in
             for row in 0..<h {
@@ -149,7 +154,11 @@ extension PixelImage {
     /// premultiplied, scaling the whole RGBA tuple by the coverage scales the alpha
     /// correctly. Corner edges are antialiased by 4×4-supersampling the coverage.
     public func maskingCorners(radiusFraction: Double) -> PixelImage {
-        let radius = radiusFraction * Double(Swift.min(width, height))
+        // Clamp to half the short side: beyond that the four corner arcs overlap and
+        // `roundedRectCoverage` erodes the middle of each edge instead of producing a
+        // capsule. The shipping caller (`fullBleedCornerRadiusFraction`) is well under
+        // 0.5; this only hardens the public entry point against larger fractions.
+        let radius = Swift.min(radiusFraction, 0.5) * Double(Swift.min(width, height))
         guard radius > 0 else { return self }
         let r = radius
         var out = samples
@@ -200,6 +209,12 @@ extension PixelImage {
     /// moves the shadow toward larger row indices — the bottom of the image. That
     /// matches the Core Graphics path, whose bottom-up context offsets by negative y
     /// (also down); the shadow-asymmetry test pins the sign.
+    ///
+    /// The fractions are taken against this image's `side`, which the render path has
+    /// already sized to the bleed-inclusive canvas (`.centred(onCanvasSide:)`). That
+    /// is the same base the Core Graphics path multiplies these fractions by —
+    /// `IconNormalizer.render`'s `canvas = Double(canvasSide)` — so the two platforms
+    /// place the shadow at the same geometry, not off by `(1 + 2·bleed)`.
     func withDropShadow(offsetFraction: Double, blurFraction: Double, alpha: Double) -> PixelImage {
         let side = width
         guard side > 0, side == height else { return self }

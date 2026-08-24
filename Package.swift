@@ -66,9 +66,11 @@ let package = Package(
         .library(name: "PictKit", targets: ["PictKit"])
     ],
     dependencies: [
-        // The Linux PNG codec (LP-04). Pure Swift, no zlib/C deps; added Linux-only
-        // via the product condition below so the Xcode build never acquires it —
-        // macOS keeps decoding/encoding through ImageIO in IconImageValidator.
+        // The Linux PNG codec (LP-04). Pure Swift, no zlib/C deps. SwiftPM resolves the
+        // repo on every platform (it lands in Package.resolved regardless — .package(url:)
+        // can't be platform-conditioned), but the product condition below limits *linking*
+        // to Linux, so the Xcode build never compiles it and macOS keeps decoding/encoding
+        // through ImageIO in IconImageValidator.
         .package(url: "https://github.com/tayloraswift/swift-png.git", from: "4.5.0"),
     ],
     targets: [

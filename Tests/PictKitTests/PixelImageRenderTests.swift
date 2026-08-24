@@ -144,6 +144,34 @@ final class PixelImageRenderTests: XCTestCase {
                           "the shadow must stay below what the rest of the app calls ink")
     }
 
+    // MARK: Cropping edge cases
+
+    /// A crop rectangle entirely outside the image must not read past the sample
+    /// buffer — it returns a transparent 1×1 rather than forcing a stray read.
+    func testCroppingAFullyOutOfBoundsRectStaysInBounds() {
+        let image = IconTestSupport.makePixelImage(width: 8, height: 8)
+        // Fully below-right, and fully above-left: both are empty intersections.
+        for (x, y) in [(20, 20), (-20, -20), (20, 0), (0, 20)] {
+            let cropped = image.cropped(x: x, y: y, width: 4, height: 4)
+            XCTAssertEqual(cropped.width, 1)
+            XCTAssertEqual(cropped.height, 1)
+            XCTAssertEqual(cropped.samples, [0, 0, 0, 0])
+        }
+    }
+
+    // MARK: Corner masking edge cases
+
+    /// A radius fraction past 0.5 must clamp, not erode: the arcs would otherwise
+    /// overlap and eat the middle of each edge. Mid-edge and centre stay opaque.
+    func testMaskingCornersClampsLargeRadiusInsteadOfErodingEdges() {
+        let square = IconTestSupport.makePixelImage(width: 100, height: 100)
+        let masked = square.maskingCorners(radiusFraction: 0.75)
+        let midTop = (0 * 100 + 50) * 4           // row 0, column 50 — middle of the top edge
+        let centre = (50 * 100 + 50) * 4
+        XCTAssertEqual(masked.samples[midTop + 3], 255, "an edge midpoint must not be eroded")
+        XCTAssertEqual(masked.samples[centre + 3], 255)
+    }
+
     private func inkFraction(of image: PixelImage, threshold: UInt8 = 128) throws -> Double {
         let mask = try XCTUnwrap(AlphaMask(pixelImage: image, longestEdge: 128))
         return Double(mask.inkCount(threshold: threshold)) / Double(mask.width * mask.height)
