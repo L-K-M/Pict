@@ -1,4 +1,3 @@
-import CoreGraphics
 import XCTest
 @testable import PictKit
 
@@ -27,15 +26,16 @@ final class IconStoreTests: XCTestCase {
         bundleURL: URL(fileURLWithPath: "/Applications/Safari.app"),
         bundleIdentifier: "com.apple.Safari")
 
-    /// A tiny opaque square — enough to encode, which is all these tests need.
-    private func makeImage(side: Int = 128) -> CGImage {
-        let context = CGContext(data: nil, width: side, height: side,
-                                bitsPerComponent: 8, bytesPerRow: 0,
-                                space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        context.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.9, alpha: 1))
-        context.fill(CGRect(x: 0, y: 0, width: side, height: side))
-        return context.makeImage()!
+    /// A tiny opaque square — enough to encode, which is all these tests need. The
+    /// `PixelImage` fixture drives the platform-neutral `setIcon` core on both
+    /// platforms (LP-05); the `CGImage` overload is a thin macOS wrapper over it.
+    ///
+    /// Deliberately small: these tests encode a PNG on every `setIcon`, and the Linux
+    /// codec is pure Swift running in an unoptimised test build, where compression time
+    /// scales with pixel count. 48 px keeps the round-trip honest without paying for
+    /// pixels no assertion here looks at.
+    private func makeImage(side: Int = 48) -> PixelImage {
+        IconTestSupport.makePixelImage(width: side, height: side)
     }
 
     // MARK: Round trip

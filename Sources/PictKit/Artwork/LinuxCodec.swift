@@ -24,7 +24,12 @@ struct LinuxCodec: IconCodec {
         let pixels = Self.straightRGBA(from: image)
         let png = PNG.Image(packing: pixels, size: (image.width, image.height),
                             layout: .init(format: .rgba8(palette: [], fill: nil)))
-        try png.compress(path: url.path, level: 9)
+        // Compression level 4, not swift-png's default (9). Measured on this
+        // codec/version, the default is the worst of both worlds for icon artwork:
+        // levels 0–6 encode an icon-sized image about equally and small, while 8–9 are
+        // markedly slower *and* produce larger files. Icons are flat-colour artwork
+        // that compresses well at any level, so 4 is fast and gives the smallest output.
+        try png.compress(path: url.path, level: 4)
     }
 
     // MARK: Conversion
