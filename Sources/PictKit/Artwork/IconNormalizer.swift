@@ -1,5 +1,7 @@
 #if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation   // CGFloat lives in Foundation on Linux (used by the render path)
 #endif
 
 /// Makes icons of wildly different shapes sit in one row without looking ragged

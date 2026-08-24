@@ -41,6 +41,7 @@ let pictKitTestsSources: [String]? = [
     "ZapManifestImportTests.swift",
     // LP-03: pure-subset suites (CG-dependent methods guarded within each file).
     "ResultConveniences.swift",
+    "PixelImageTests.swift",
     "IconBitmapTests.swift",
     "IconShapeClassifierTests.swift",
     "IconNormalizerTests.swift",

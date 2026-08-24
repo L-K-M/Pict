@@ -65,11 +65,11 @@ public extension PixelImage {
                                           space: space,
                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
             else { return false }
-            // A bitmap context's origin is bottom-left, so drawing straight would
-            // put the image's first row last. Flip so buffer row 0 is the image's
-            // top row, making this exactly reversible by `makeCGImage()`.
-            context.translateBy(x: 0, y: CGFloat(height))
-            context.scaleBy(x: 1, y: -1)
+            // A bitmap context's backing memory is row 0 = top, and drawing with
+            // the identity CTM lands the image's first scanline in memory row 0 —
+            // the same convention `AlphaMask.init(image:)` samples through and the
+            // exact inverse of `makeCGImage()`. (No flip: a flip here would mirror
+            // the result and break parity with the CG path.)
             context.draw(image, in: CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
             return true
         }
