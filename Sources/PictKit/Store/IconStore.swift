@@ -95,13 +95,28 @@ public final class IconStore {
     }
 
     #if canImport(CoreGraphics)
-    /// Decodes the override for `target`, or `nil` when there isn't one.
+    /// Decodes the override for `target` as a `CGImage` (macOS), or `nil` when there
+    /// isn't one. Unchanged from before the seam; the Linux counterpart below returns
+    /// a `PixelImage` through the pure-Swift codec.
     public func image(for target: IconTarget) -> CGImage? {
         guard let url = imageURL(for: target) else { return nil }
         switch IconImageValidator.decode(contentsOf: url) {
         case .success(let image): return image
         case .failure: return nil
         }
+    }
+    #else
+    /// Decodes the override for `target` as a `PixelImage` (Linux), or `nil` when
+    /// there isn't one — the read half of the codec seam, through swift-png (LP-04).
+    public func image(for target: IconTarget) -> PixelImage? {
+        guard let url = imageURL(for: target), let image = LinuxCodec().decode(url) else { return nil }
+        // Apply the same accept/reject policy the macOS path gets from
+        // `IconImageValidator.decode` (min/max pixels, aspect), so the two platforms
+        // treat the same store contents identically. `LinuxCodec`'s own pre-decompress
+        // cap already bounds the allocation; this adds the icon-size floor on top.
+        guard case .success = IconImageValidator.check(pixelWidth: image.width,
+                                                       pixelHeight: image.height) else { return nil }
+        return image
     }
     #endif
 
@@ -116,7 +131,6 @@ public final class IconStore {
 
     // MARK: Writing
 
-    #if canImport(CoreGraphics)
     /// Why a write didn't happen.
     public enum WriteFailure: Error, Equatable {
         /// The image was rejected — too big, unreadable, not encodable.
@@ -136,6 +150,27 @@ public final class IconStore {
     /// quietly decoded a URL with ImageIO would be a second ingestion path that
     /// silently refused every SVG, which is the bug this arrangement exists to make
     /// unrepeatable.
+    ///
+    /// This `PixelImage` signature is the platform-neutral core, encoded to disk
+    /// through the codec seam — swift-png on Linux, ImageIO on macOS. The `CGImage`
+    /// overload below is the macOS entry point Pict's ingestion actually feeds.
+    @discardableResult
+    public func setIcon(_ image: PixelImage, for target: IconTarget,
+                        origin: IconEntry.Origin = .file,
+                        provider: String? = nil, credit: String? = nil,
+                        creditURL: String? = nil, license: String? = nil,
+                        writtenBy: String = IconStoreLocation.callingAppName,
+                        now: Date = Date()) -> Result<IconEntry, WriteFailure> {
+        storeIcon(for: target, origin: origin, provider: provider, credit: credit,
+                  creditURL: creditURL, license: license, writtenBy: writtenBy, now: now) { url in
+            Self.encodePNG(image, to: url)
+        }
+    }
+
+    #if canImport(CoreGraphics)
+    /// macOS convenience overload: Pict's ingestion produces a `CGImage`. Encodes it
+    /// straight through ImageIO, exactly as before the seam — the bytes that land on
+    /// disk on macOS are unchanged.
     @discardableResult
     public func setIcon(_ image: CGImage, for target: IconTarget,
                         origin: IconEntry.Origin = .file,
@@ -143,32 +178,10 @@ public final class IconStore {
                         creditURL: String? = nil, license: String? = nil,
                         writtenBy: String = IconStoreLocation.callingAppName,
                         now: Date = Date()) -> Result<IconEntry, WriteFailure> {
-        guard let key = IconEntryKey.storageKey(for: target) else { return .failure(.unkeyable) }
-
-        do {
-            try fileManager.createDirectory(at: entriesDirectory, withIntermediateDirectories: true)
-        } catch {
-            NSLog("PictKit: couldn't create the icon store directory: %@", error.localizedDescription)
-            return .failure(.directoryUnavailable)
+        storeIcon(for: target, origin: origin, provider: provider, credit: credit,
+                  creditURL: creditURL, license: license, writtenBy: writtenBy, now: now) { url in
+            IconImageValidator.writePNG(image, to: url)
         }
-        IconStoreLocation.seedReadMe(in: directory, fileManager: fileManager)
-
-        let imageName = "\(key.fileStem).png"
-        guard let imageURL = IconEntryKey.resolvedURL(forFile: imageName, in: entriesDirectory,
-                                                      extensions: Self.imageExtensions) else {
-            return .failure(.rejected(.notEncodable))
-        }
-        if case .failure(let rejection) = IconImageValidator.writePNG(image, to: imageURL) {
-            return .failure(.rejected(rejection))
-        }
-
-        let entry = IconEntry(key: key.serialized, image: imageName, source: origin.rawValue,
-                              provider: provider, credit: credit, creditURL: creditURL,
-                              license: license, addedAt: now, writtenBy: writtenBy)
-
-        guard write(entry, for: key) else { return .failure(.directoryUnavailable) }
-        retireLessSpecificKeys(for: target, keeping: key)
-        return .success(entry)
     }
     #endif
 
@@ -266,6 +279,65 @@ public final class IconStore {
     }
 
     // MARK: Private
+
+    /// The shared orchestration behind both `setIcon` overloads: resolve the storage
+    /// key, ensure the directory, encode the image via `writeImage` (the one step that
+    /// differs by platform and by source type), then write and index the entry. The
+    /// two overloads therefore differ only in how they turn their image into a PNG.
+    private func storeIcon(for target: IconTarget, origin: IconEntry.Origin,
+                           provider: String?, credit: String?, creditURL: String?,
+                           license: String?, writtenBy: String, now: Date,
+                           writeImage: (URL) -> Result<Void, IconImageValidator.Rejection>)
+        -> Result<IconEntry, WriteFailure> {
+        guard let key = IconEntryKey.storageKey(for: target) else { return .failure(.unkeyable) }
+
+        do {
+            try fileManager.createDirectory(at: entriesDirectory, withIntermediateDirectories: true)
+        } catch {
+            NSLog("PictKit: couldn't create the icon store directory: %@", error.localizedDescription)
+            return .failure(.directoryUnavailable)
+        }
+        IconStoreLocation.seedReadMe(in: directory, fileManager: fileManager)
+
+        let imageName = "\(key.fileStem).png"
+        guard let imageURL = IconEntryKey.resolvedURL(forFile: imageName, in: entriesDirectory,
+                                                      extensions: Self.imageExtensions) else {
+            return .failure(.rejected(.notEncodable))
+        }
+        if case .failure(let rejection) = writeImage(imageURL) {
+            return .failure(.rejected(rejection))
+        }
+
+        let entry = IconEntry(key: key.serialized, image: imageName, source: origin.rawValue,
+                              provider: provider, credit: credit, creditURL: creditURL,
+                              license: license, addedAt: now, writtenBy: writtenBy)
+
+        guard write(entry, for: key) else { return .failure(.directoryUnavailable) }
+        retireLessSpecificKeys(for: target, keeping: key)
+        return .success(entry)
+    }
+
+    /// Encodes a `PixelImage` to a PNG at `url`: ImageIO on macOS (via a `CGImage`),
+    /// the pure-Swift codec on Linux (LP-04). The Linux write half of the codec seam.
+    private static func encodePNG(_ image: PixelImage, to url: URL)
+        -> Result<Void, IconImageValidator.Rejection> {
+        #if canImport(CoreGraphics)
+        guard let cgImage = image.makeCGImage() else { return .failure(.notEncodable) }
+        return IconImageValidator.writePNG(cgImage, to: url)
+        #else
+        do {
+            try LinuxCodec().encodePNG(image, to: url)
+            return .success(())
+        } catch {
+            // Matches the directory-creation failure above: a genuine I/O error
+            // (disk full, permission) is reported as `.notEncodable` like the macOS
+            // path, but logged so the underlying cause is diagnosable from the field.
+            NSLog("PictKit: couldn't encode the icon PNG at %@: %@",
+                  url.path, String(describing: error))
+            return .failure(.notEncodable)
+        }
+        #endif
+    }
 
     private func entryURL(for key: IconEntryKey) -> URL? {
         IconEntryKey.resolvedURL(forFile: "\(key.fileStem).json", in: entriesDirectory,

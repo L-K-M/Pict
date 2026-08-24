@@ -1,4 +1,3 @@
-import CoreGraphics
 import XCTest
 @testable import PictKit
 
@@ -27,15 +26,18 @@ final class IconStoreTests: XCTestCase {
         bundleURL: URL(fileURLWithPath: "/Applications/Safari.app"),
         bundleIdentifier: "com.apple.Safari")
 
-    /// A tiny opaque square — enough to encode, which is all these tests need.
-    private func makeImage(side: Int = 128) -> CGImage {
-        let context = CGContext(data: nil, width: side, height: side,
-                                bitsPerComponent: 8, bytesPerRow: 0,
-                                space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        context.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.9, alpha: 1))
-        context.fill(CGRect(x: 0, y: 0, width: side, height: side))
-        return context.makeImage()!
+    /// A tiny opaque square — enough to encode, which is all these tests need. The
+    /// `PixelImage` fixture drives the platform-neutral `setIcon` core on both
+    /// platforms (LP-05); the `CGImage` overload is a thin macOS wrapper over it.
+    ///
+    /// Deliberately small: these tests encode a PNG on every `setIcon`, and the Linux
+    /// codec is pure Swift running in an unoptimised test build, where compression time
+    /// scales with pixel count. 64 px is the smallest that still round-trips on both
+    /// platforms — `image(for:)` on macOS decodes through `IconImageValidator`, which
+    /// rejects anything under `Limits.hardMinimumPixels` (64), while the Linux codec has
+    /// no such floor. Kept at exactly that minimum to keep the encode cheap.
+    private func makeImage(side: Int = 64) -> PixelImage {
+        IconTestSupport.makePixelImage(width: side, height: side)
     }
 
     // MARK: Round trip

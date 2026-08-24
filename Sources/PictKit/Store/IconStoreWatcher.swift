@@ -1,3 +1,4 @@
+#if canImport(CoreServices)
 import CoreServices
 import Foundation
 
@@ -111,3 +112,4 @@ public final class IconStoreWatcher {
         }
     }
 }
+#endif
