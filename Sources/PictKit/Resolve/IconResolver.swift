@@ -1,14 +1,16 @@
 #if canImport(AppKit)
 import AppKit
 #endif
-// CoreGraphics under its own gate — a superset of the `canImport(AppKit)` the image
-// types use below: it's imported wherever CGImage might exist, and CGImage is only
-// referenced on the AppKit path, so the import is never missing where it's needed.
+// Foundation is imported unconditionally: this file uses it on every platform (NSLock,
+// DispatchQueue, NSSize/CGFloat). CoreGraphics sits under its own `canImport` gate
+// because CGImage is only referenced on the AppKit path. Foundation is deliberately NOT
+// tucked into an `#else` of that gate — that would tie whether Foundation is in scope to
+// CoreGraphics's availability, so the Linux build would lean on the toolchain
+// re-exporting Foundation instead of importing it outright. Matches IconResolverTests.
 #if canImport(CoreGraphics)
 import CoreGraphics
-#else
-import Foundation
 #endif
+import Foundation
 
 #if canImport(AppKit)
 /// The resolved artwork type — an `NSImage` on macOS, ready to draw.

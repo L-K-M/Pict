@@ -50,8 +50,10 @@ public enum PictURL {
     ///
     /// **On Linux this returns the handler's `.desktop` file when it can be located, or
     /// `nil` otherwise — always a real file URL, never a marker.** For a pure "is Pict
-    /// installed" check that doesn't depend on locating the file, use `isInstalled`. The
-    /// first Linux call blocks (spawns xdg-mime), so call it off the main thread.
+    /// installed" check that doesn't depend on locating the file, use `isInstalled`
+    /// (Linux-only; on macOS compare `installedAppURL()` against `nil`). The first Linux
+    /// call blocks (spawns xdg-mime) and, while no handler is registered, re-probes at
+    /// most once per 30s — so call it off the main thread.
     public static func installedAppURL() -> URL? {
         #if canImport(AppKit)
         guard let probe else { return nil }
@@ -65,8 +67,8 @@ public enum PictURL {
     #if !canImport(AppKit)
     /// Whether a default handler for Pict's scheme is registered — the Linux presence
     /// check, split from the location `installedAppURL()` returns so callers never see a
-    /// fabricated marker URL. Blocks on first use (spawns xdg-mime); call off the main
-    /// thread.
+    /// fabricated marker URL. Blocks on first use (spawns xdg-mime) and, while no handler
+    /// is registered, re-probes at most once per 30s; call off the main thread.
     public static var isInstalled: Bool { registeredSchemeHandler()?.isEmpty == false }
     #endif
 
@@ -76,9 +78,10 @@ public enum PictURL {
     /// Opens Pict at `target`, or just opens Pict when there is nothing to select.
     /// Returns whether anything was opened.
     ///
-    /// **On Linux the first call blocks briefly** — the one-time `xdg-mime` spawn behind
-    /// `registeredSchemeHandler()` — so if this is reachable from UI code, call or
-    /// pre-warm it off the main thread.
+    /// **On Linux the first call blocks briefly** — the `xdg-mime` spawn behind
+    /// `registeredSchemeHandler()`, repeated at most once per 30s while Pict isn't the
+    /// registered handler — so if this is reachable from UI code, call or pre-warm it off
+    /// the main thread.
     @discardableResult
     public static func open(selecting target: IconTarget?) -> Bool {
         guard let url = target.flatMap(edit) ?? probe else { return false }
@@ -100,16 +103,25 @@ public enum PictURL {
 
     private static let handlerLock = NSLock()
     private static var cachedSchemeHandler: String?
+    private static var lastNegativeProbe: Date?
+    /// How long a "no handler registered" result is trusted before `xdg-mime` is spawned
+    /// again. Bounds the spawn rate while Pict isn't installed, yet still notices an
+    /// install within a few seconds.
+    private static let negativeProbeTTL: TimeInterval = 30
 
     /// The XDG default handler for Pict's scheme. `xdg-mime` is a shell script (it may
     /// chain gio/xprop), so a per-call spawn is too heavy for what was a free Launch
     /// Services lookup on macOS — but a *negative* result must not be frozen (Launch
     /// Services is dynamic; a user can install Pict, or make it the default, mid-run).
-    /// So a registered handler is cached, and a nil/empty probe is re-run next call.
+    /// So a registered handler is cached forever, and a nil/empty probe is trusted only
+    /// for `negativeProbeTTL` before it is re-run: bounded spawns, but an install is
+    /// still picked up within seconds.
     private static func registeredSchemeHandler() -> String? {
         handlerLock.lock()
         defer { handlerLock.unlock() }
         if let cached = cachedSchemeHandler, !cached.isEmpty { return cached }
+        if let probed = lastNegativeProbe, Date().timeIntervalSince(probed) < negativeProbeTTL { return nil }
+        lastNegativeProbe = Date()
         cachedSchemeHandler = capture("xdg-mime", ["query", "default", "x-scheme-handler/\(scheme)"])
         return cachedSchemeHandler
     }
