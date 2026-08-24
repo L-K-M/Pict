@@ -1,4 +1,6 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 
 /// A small grid of alpha samples taken off a `CGImage`, used to reason about an
 /// icon's shape without keeping the full-resolution bitmap around.
@@ -46,6 +48,45 @@ public struct AlphaMask: Equatable {
         self.samples = samples
     }
 
+    /// Samples a `PixelImage`'s alpha channel onto a grid whose longest edge is
+    /// `longestEdge`, area-averaging each cell's source footprint. The pure-Swift
+    /// counterpart of `init(image:longestEdge:)`, routed through the raw-samples
+    /// initializer so both platforms measure shapes the same way.
+    public init?(pixelImage: PixelImage, longestEdge: Int) {
+        let sourceWidth = pixelImage.width
+        let sourceHeight = pixelImage.height
+        guard sourceWidth > 0, sourceHeight > 0, longestEdge >= 8 else { return nil }
+
+        let longest = Swift.max(sourceWidth, sourceHeight)
+        let gridWidth = Swift.max(1, Int((Double(sourceWidth) / Double(longest) * Double(longestEdge)).rounded()))
+        let gridHeight = Swift.max(1, Int((Double(sourceHeight) / Double(longest) * Double(longestEdge)).rounded()))
+
+        var alpha = [UInt8](repeating: 0, count: gridWidth * gridHeight)
+        pixelImage.samples.withUnsafeBufferPointer { source in
+            for gridRow in 0..<gridHeight {
+                let y0 = gridRow * sourceHeight / gridHeight
+                let y1 = Swift.max(y0 + 1, (gridRow + 1) * sourceHeight / gridHeight)
+                for gridColumn in 0..<gridWidth {
+                    let x0 = gridColumn * sourceWidth / gridWidth
+                    let x1 = Swift.max(x0 + 1, (gridColumn + 1) * sourceWidth / gridWidth)
+                    var sum = 0
+                    var count = 0
+                    for sourceRow in y0..<y1 {
+                        let rowBase = sourceRow * sourceWidth
+                        for sourceColumn in x0..<x1 {
+                            sum += Int(source[(rowBase + sourceColumn) * 4 + 3])
+                            count += 1
+                        }
+                    }
+                    alpha[gridRow * gridWidth + gridColumn] = UInt8(sum / Swift.max(count, 1))
+                }
+            }
+        }
+
+        self.init(width: gridWidth, height: gridHeight, samples: alpha)
+    }
+
+    #if canImport(CoreGraphics)
     /// Samples `image`'s alpha channel onto a grid whose longest edge is
     /// `longestEdge`, or `nil` when it can't be rasterised.
     public init?(image: CGImage, longestEdge: Int) {
@@ -88,6 +129,7 @@ public struct AlphaMask: Equatable {
         self.height = gridHeight
         self.samples = alpha
     }
+    #endif
 
     // MARK: Measurements
 

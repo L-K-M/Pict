@@ -1,7 +1,9 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
-import Foundation
 import ImageIO
 import UniformTypeIdentifiers
+#endif
+import Foundation
 
 /// The format, dimension and safety gate every image passes through before Zap
 /// will store or draw it (`UNJAILED.md §6`).
@@ -133,6 +135,7 @@ public enum IconImageValidator {
 
     // MARK: Decoding
 
+    #if canImport(CoreGraphics)
     /// Validates and decodes the image at `url`, bounded to the stored master
     /// size. The type is taken from the decoded data, never from the extension.
     public static func decode(contentsOf url: URL) -> Result<CGImage, Rejection> {
@@ -210,6 +213,7 @@ public enum IconImageValidator {
         guard CGImageDestinationFinalize(destination) else { return .failure(.notEncodable) }
         return .success(())
     }
+    #endif
 
     // MARK: Frames
 
@@ -221,6 +225,7 @@ public enum IconImageValidator {
         public var hasAlpha: Bool
     }
 
+    #if canImport(CoreGraphics)
     /// The largest representation in `source` by pixel count.
     ///
     /// `.icns` files carry every size from 16 px up in one container, and app
@@ -249,4 +254,5 @@ public enum IconImageValidator {
     private static var sourceOptions: CFDictionary {
         [kCGImageSourceShouldCache: false] as [CFString: Any] as CFDictionary
     }
+    #endif
 }
