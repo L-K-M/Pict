@@ -103,26 +103,38 @@ public enum PictURL {
 
     private static let handlerLock = NSLock()
     private static var cachedSchemeHandler: String?
+    private static var lastPositiveProbe: Date?
     private static var lastNegativeProbe: Date?
     /// How long a "no handler registered" result is trusted before `xdg-mime` is spawned
     /// again. Bounds the spawn rate while Pict isn't installed, yet still notices an
-    /// install within a few seconds.
+    /// install within `negativeProbeTTL` (30 s).
     private static let negativeProbeTTL: TimeInterval = 30
+    /// How long a *registered* handler is trusted. Longer than the negative TTL — a
+    /// default handler rarely changes — but not forever, so a mid-run uninstall or
+    /// default-handler change is noticed within `positiveProbeTTL` (5 min), matching the
+    /// dynamism of the `NSWorkspace` lookup this replaces on macOS.
+    private static let positiveProbeTTL: TimeInterval = 300
 
     /// The XDG default handler for Pict's scheme. `xdg-mime` is a shell script (it may
     /// chain gio/xprop), so a per-call spawn is too heavy for what was a free Launch
-    /// Services lookup on macOS — but a *negative* result must not be frozen (Launch
-    /// Services is dynamic; a user can install Pict, or make it the default, mid-run).
-    /// So a registered handler is cached forever, and a nil/empty probe is trusted only
-    /// for `negativeProbeTTL` before it is re-run: bounded spawns, but an install is
-    /// still picked up within seconds.
+    /// Services lookup on macOS — but neither result may be frozen for the process
+    /// lifetime, because Launch Services is dynamic: a user can install Pict, uninstall
+    /// it, or change the default, mid-run. So each result is cached with a TTL — a
+    /// registered handler for `positiveProbeTTL`, a nil/empty probe for the shorter
+    /// `negativeProbeTTL` — bounded spawns, but a change is still picked up within the
+    /// TTL. `capture` bounds each spawn with its own timeout, so the lock this holds is
+    /// never held indefinitely.
     private static func registeredSchemeHandler() -> String? {
         handlerLock.lock()
         defer { handlerLock.unlock() }
-        if let cached = cachedSchemeHandler, !cached.isEmpty { return cached }
+        if let cached = cachedSchemeHandler, !cached.isEmpty,
+           let probed = lastPositiveProbe, Date().timeIntervalSince(probed) < positiveProbeTTL {
+            return cached
+        }
         if let probed = lastNegativeProbe, Date().timeIntervalSince(probed) < negativeProbeTTL { return nil }
         lastNegativeProbe = Date()
         cachedSchemeHandler = capture("xdg-mime", ["query", "default", "x-scheme-handler/\(scheme)"])
+        if cachedSchemeHandler?.isEmpty == false { lastPositiveProbe = Date() }
         return cachedSchemeHandler
     }
 
@@ -164,8 +176,18 @@ public enum PictURL {
         return nil
     }
 
+    /// Ceiling on a single `capture` spawn. Generous for a local MIME query (a few
+    /// milliseconds in practice) but finite, so a wedged child can't hold `handlerLock`
+    /// for the process lifetime.
+    private static let captureTimeout: TimeInterval = 5
+
     /// Runs `command arguments` (resolved via `PATH`), returning its trimmed stdout,
-    /// or `nil` if it couldn't be launched or exited non-zero.
+    /// or `nil` if it couldn't be launched, timed out, or exited non-zero.
+    ///
+    /// Bounded by `captureTimeout`: `registeredSchemeHandler()` calls this while holding
+    /// `handlerLock`, so an `xdg-mime` that wedges (a broken gio/xprop chain, a frozen
+    /// network home) must not block that lock forever and brick every `PictURL` entry
+    /// point. On timeout the child is terminated and the call returns `nil`.
     private static func capture(_ command: String, _ arguments: [String]) -> String? {
         let process = Process()
         process.executableURL = envURL
@@ -173,9 +195,21 @@ public enum PictURL {
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
+        // Signal completion from the termination handler so the wait below has a
+        // deadline. The handler also makes Foundation reap the child, so a timed-out
+        // (terminated) process doesn't linger as a zombie. Set before run() so a fast
+        // exit can't be missed.
+        let exited = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in exited.signal() }
         guard (try? process.run()) != nil else { return nil }
+        // Wait for exit before reading: these commands emit a single short line (a
+        // desktop-file ID / MIME type), far below the pipe buffer, so the child can't
+        // block on a full pipe while we wait — no deadlock, no unread-pipe hang.
+        guard exited.wait(timeout: .now() + captureTimeout) == .success else {
+            process.terminate()
+            return nil
+        }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
         guard process.terminationStatus == 0 else { return nil }
         return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     }
