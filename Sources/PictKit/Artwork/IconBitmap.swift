@@ -1,4 +1,8 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation   // CGFloat lives in Foundation on Linux
+#endif
 
 /// The pixel operations behind icon substitution: resampling, corner masking, and
 /// the one bitmap context every other step draws into.
@@ -23,6 +27,7 @@ public enum IconBitmap {
         return max(IconImageValidator.Limits.warnBelowPixels, pixels)
     }
 
+    #if canImport(CoreGraphics)
     /// Resamples `image` so its longest edge is `longestEdge`, never upscaling.
     public static func downsample(_ image: CGImage, longestEdge: Int) -> CGImage {
         let sourceLongest = max(image.width, image.height)
@@ -64,4 +69,5 @@ public enum IconBitmap {
                          bitsPerComponent: 8, bytesPerRow: 0, space: space,
                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
     }
+    #endif
 }

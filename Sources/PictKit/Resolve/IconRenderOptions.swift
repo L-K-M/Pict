@@ -1,4 +1,8 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation   // CGFloat lives in Foundation on Linux
+#endif
 
 /// Everything the resolver needs to know about *how* to draw, as plain data.
 ///

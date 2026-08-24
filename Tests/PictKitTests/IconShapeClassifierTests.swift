@@ -1,4 +1,6 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 import XCTest
 @testable import PictKit
@@ -177,6 +179,8 @@ final class IconShapeClassifierTests: XCTestCase {
         XCTAssertEqual(IconShapeClassifier.classify(profile), .freeform)
     }
 
+    #if canImport(CoreGraphics)
+
     // MARK: Through Core Graphics
 
     /// The synthetic-mask tests above exercise the arithmetic; this one proves the
@@ -209,4 +213,5 @@ final class IconShapeClassifierTests: XCTestCase {
 
         XCTAssertEqual(IconShapeClassifier.classify(image), .fullBleed)
     }
+    #endif
 }

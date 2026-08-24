@@ -1,4 +1,6 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 
 /// A small grid of alpha samples taken off a `CGImage`, used to reason about an
 /// icon's shape without keeping the full-resolution bitmap around.
@@ -46,16 +48,79 @@ public struct AlphaMask: Equatable {
         self.samples = samples
     }
 
-    /// Samples `image`'s alpha channel onto a grid whose longest edge is
-    /// `longestEdge`, or `nil` when it can't be rasterised.
-    public init?(image: CGImage, longestEdge: Int) {
-        let sourceWidth = image.width
-        let sourceHeight = image.height
-        guard sourceWidth > 0, sourceHeight > 0, longestEdge >= 8 else { return nil }
+    /// The valid `longestEdge` range for the samplers. The floor keeps a corner
+    /// radius resolving to several cells; the ceiling bounds the ~`longestEdge`²
+    /// grid allocation. A request outside `minLongestEdge...maxLongestEdge` makes the
+    /// initializers return `nil` rather than trap or over-allocate.
+    public static let minLongestEdge = 8
+    public static let maxLongestEdge = 4096
 
+    /// Grid dimensions for a `sourceWidth × sourceHeight` source whose longest edge
+    /// maps to `longestEdge` — or `nil` for a degenerate or out-of-range request.
+    /// Both sampling paths route through this, so they cannot drift; and, like the
+    /// other failable initializers here, an extreme `longestEdge` returns `nil`
+    /// rather than trapping the `Int(_:)` conversion or overflowing the sample
+    /// allocation.
+    static func gridSize(sourceWidth: Int, sourceHeight: Int, longestEdge: Int) -> (width: Int, height: Int)? {
+        guard sourceWidth > 0, sourceHeight > 0,
+              longestEdge >= minLongestEdge, longestEdge <= maxLongestEdge else { return nil }
         let longest = Swift.max(sourceWidth, sourceHeight)
         let gridWidth = Swift.max(1, Int((Double(sourceWidth) / Double(longest) * Double(longestEdge)).rounded()))
         let gridHeight = Swift.max(1, Int((Double(sourceHeight) / Double(longest) * Double(longestEdge)).rounded()))
+        return (gridWidth, gridHeight)
+    }
+
+    /// Samples a `PixelImage`'s alpha channel onto a grid whose longest edge is
+    /// `longestEdge` (valid range `minLongestEdge...maxLongestEdge`; out of range
+    /// returns `nil`), area-averaging each cell's source footprint. A box filter, so
+    /// cell values can differ slightly from the CG path's resampling — grid
+    /// dimensions and classification agree, exact samples don't. The pure-Swift
+    /// counterpart of `init(image:longestEdge:)`, routed through the same `gridSize`
+    /// and the raw-samples initializer.
+    public init?(pixelImage: PixelImage, longestEdge: Int) {
+        guard let grid = AlphaMask.gridSize(sourceWidth: pixelImage.width,
+                                            sourceHeight: pixelImage.height,
+                                            longestEdge: longestEdge) else { return nil }
+        let sourceWidth = pixelImage.width
+        let sourceHeight = pixelImage.height
+        let gridWidth = grid.width
+        let gridHeight = grid.height
+
+        var alpha = [UInt8](repeating: 0, count: gridWidth * gridHeight)
+        pixelImage.samples.withUnsafeBufferPointer { source in
+            for gridRow in 0..<gridHeight {
+                let y0 = gridRow * sourceHeight / gridHeight
+                let y1 = Swift.max(y0 + 1, (gridRow + 1) * sourceHeight / gridHeight)
+                for gridColumn in 0..<gridWidth {
+                    let x0 = gridColumn * sourceWidth / gridWidth
+                    let x1 = Swift.max(x0 + 1, (gridColumn + 1) * sourceWidth / gridWidth)
+                    var sum = 0
+                    var count = 0
+                    for sourceRow in y0..<y1 {
+                        let rowBase = sourceRow * sourceWidth
+                        for sourceColumn in x0..<x1 {
+                            sum += Int(source[(rowBase + sourceColumn) * 4 + 3])
+                            count += 1
+                        }
+                    }
+                    alpha[gridRow * gridWidth + gridColumn] = UInt8(sum / Swift.max(count, 1))
+                }
+            }
+        }
+
+        self.init(width: gridWidth, height: gridHeight, samples: alpha)
+    }
+
+    #if canImport(CoreGraphics)
+    /// Samples `image`'s alpha channel onto a grid whose longest edge is
+    /// `longestEdge` (valid range `minLongestEdge...maxLongestEdge`), or `nil` when
+    /// the request is out of range or it can't be rasterised.
+    public init?(image: CGImage, longestEdge: Int) {
+        guard let grid = AlphaMask.gridSize(sourceWidth: image.width,
+                                            sourceHeight: image.height,
+                                            longestEdge: longestEdge) else { return nil }
+        let gridWidth = grid.width
+        let gridHeight = grid.height
 
         // Core Graphics has no Swift-expressible alpha-only bitmap context (the
         // colour space parameter is non-optional, and alpha-only requires none),
@@ -88,6 +153,7 @@ public struct AlphaMask: Equatable {
         self.height = gridHeight
         self.samples = alpha
     }
+    #endif
 
     // MARK: Measurements
 

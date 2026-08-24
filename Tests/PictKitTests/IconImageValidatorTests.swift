@@ -1,10 +1,15 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 import XCTest
 @testable import PictKit
 
 final class IconImageValidatorTests: XCTestCase {
 
+    #if canImport(CoreGraphics)
+    // A temp directory for the decode/encode tests, which need real PNGs (and so
+    // Core Graphics). The pure check()-table tests below need none of it.
     private var directory: URL!
 
     override func setUp() {
@@ -17,6 +22,7 @@ final class IconImageValidatorTests: XCTestCase {
         directory = nil
         super.tearDown()
     }
+    #endif
 
     // MARK: The §6.2 accept/reject table
 
@@ -90,6 +96,8 @@ final class IconImageValidatorTests: XCTestCase {
         XCTAssertFalse(without.hasAlpha)
     }
 
+    #if canImport(CoreGraphics)
+
     // MARK: Decoding
 
     func testDecodesAPNGFromDisk() throws {
@@ -149,4 +157,5 @@ final class IconImageValidatorTests: XCTestCase {
         let reloaded = try XCTUnwrap(IconImageValidator.decode(contentsOf: url).successValue)
         XCTAssertEqual(reloaded.width, 300)
     }
+    #endif
 }

@@ -1,4 +1,6 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 import XCTest
 @testable import PictKit
@@ -111,6 +113,8 @@ final class IconNormalizerTests: XCTestCase {
             XCTAssertFalse(layout.wasClamped)
         }
     }
+
+    #if canImport(CoreGraphics)
 
     // MARK: Rendering
 
@@ -244,4 +248,5 @@ final class IconNormalizerTests: XCTestCase {
         let mask = try XCTUnwrap(AlphaMask(image: image, longestEdge: 128))
         return Double(mask.inkCount(threshold: threshold)) / Double(mask.width * mask.height)
     }
+    #endif
 }

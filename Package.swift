@@ -27,10 +27,25 @@ let pictKitSources: [String]? = [
     "Store/IconStore.swift",
     "Migration/ZapManifestImport.swift",
     "Resolve/IconSourceMode.swift",
+    // LP-03: the artwork seam + pure math (CG-touching members guarded).
+    "Artwork/PixelImage.swift",
+    "Artwork/AlphaMask.swift",
+    "Artwork/IconShapeClassifier.swift",
+    "Artwork/IconNormalizer.swift",
+    "Artwork/IconImageValidator.swift",
+    "Artwork/IconBitmap.swift",
+    "Resolve/IconRenderOptions.swift",
 ]
 let pictKitTestsSources: [String]? = [
     "IconEntryKeyTests.swift",
     "ZapManifestImportTests.swift",
+    // LP-03: pure-subset suites (CG-dependent methods guarded within each file).
+    "ResultConveniences.swift",
+    "PixelImageTests.swift",
+    "IconBitmapTests.swift",
+    "IconShapeClassifierTests.swift",
+    "IconNormalizerTests.swift",
+    "IconImageValidatorTests.swift",
 ]
 #else
 let pictKitSources: [String]? = nil

@@ -1,5 +1,9 @@
+#if canImport(AppKit)
 import AppKit
+#endif
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 import XCTest
 @testable import PictKit
@@ -27,6 +31,8 @@ final class IconBitmapTests: XCTestCase {
     func testCachedPixelSizeRoundsUp() {
         XCTAssertEqual(IconBitmap.pixelSize(forIconSize: 100.5, scale: 1.5), 151)
     }
+
+    #if canImport(CoreGraphics)
 
     // MARK: Downsampling
 
@@ -69,6 +75,8 @@ final class IconBitmapTests: XCTestCase {
         let masked = IconBitmap.maskingCorners(square, radiusFraction: 0)
         XCTAssertEqual(IconShapeClassifier.classify(masked), .fullBleed)
     }
+
+    #endif
 
     // MARK: Source modes
 

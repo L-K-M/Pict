@@ -1,4 +1,6 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 
 /// The shape family an icon's artwork belongs to, judged from its alpha channel.
 ///
@@ -129,9 +131,18 @@ public enum IconShapeClassifier {
 
     // MARK: Classification
 
+    #if canImport(CoreGraphics)
     /// Classifies `image`, or `.empty` when its alpha can't be read.
     public static func classify(_ image: CGImage) -> IconShape {
         guard let profile = profile(of: image) else { return .empty }
+        return classify(profile)
+    }
+    #endif
+
+    /// Classifies a `PixelImage`, or `.empty` when its alpha can't be read. The
+    /// platform-neutral counterpart of `classify(_ image: CGImage)`.
+    public static func classify(_ pixelImage: PixelImage) -> IconShape {
+        guard let profile = profile(of: pixelImage) else { return .empty }
         return classify(profile)
     }
 
@@ -158,9 +169,18 @@ public enum IconShapeClassifier {
 
     // MARK: Measurement
 
+    #if canImport(CoreGraphics)
     /// Measures `image`'s alpha channel, or `nil` when it can't be rasterised.
     public static func profile(of image: CGImage) -> AlphaProfile? {
         guard let mask = AlphaMask(image: image, longestEdge: sampleResolution) else { return nil }
+        return profile(of: mask)
+    }
+    #endif
+
+    /// Measures a `PixelImage`'s alpha channel, or `nil` when it can't be sampled.
+    /// The platform-neutral counterpart of `profile(of image: CGImage)`.
+    public static func profile(of pixelImage: PixelImage) -> AlphaProfile? {
+        guard let mask = AlphaMask(pixelImage: pixelImage, longestEdge: sampleResolution) else { return nil }
         return profile(of: mask)
     }
 

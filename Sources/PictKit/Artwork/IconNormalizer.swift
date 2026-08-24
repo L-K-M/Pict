@@ -1,4 +1,8 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation   // CGFloat lives in Foundation on Linux (used by the render path)
+#endif
 
 /// Makes icons of wildly different shapes sit in one row without looking ragged
 /// (`UNJAILED.md §8.3`).
@@ -117,6 +121,7 @@ public enum IconNormalizer {
 
     // MARK: Rendering
 
+    #if canImport(CoreGraphics)
     /// Trims, scales and (optionally) shadows `image` into a square canvas of
     /// `targetExtent * (1 + 2 * bleed)` pixels. Returns the input unchanged if it
     /// carries no ink or can't be rasterised.
@@ -187,4 +192,5 @@ public enum IconNormalizer {
         context.draw(source, in: drawRect)
         return context.makeImage()
     }
+    #endif
 }
