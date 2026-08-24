@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import Foundation
 import XCTest
 @testable import PictKit
@@ -193,3 +194,5 @@ final class BundleArtworkTests: XCTestCase {
         XCTAssertNil(BundleArtwork.image(forBundleAt: bundle))
     }
 }
+
+#endif

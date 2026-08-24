@@ -1,4 +1,7 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
+import Foundation
 import XCTest
 @testable import PictKit
 
@@ -40,7 +43,7 @@ final class IconResolverTests: XCTestCase {
     /// apps store, so this exercises the same rung they do.
     private func seededStore(for target: IconTarget) -> IconStore {
         let store = makeStore()
-        let artwork = IconTestSupport.makeImage(width: 512, height: 512)
+        let artwork = IconTestSupport.makePixelImage(width: 64, height: 64)
         guard case .success = store.setIcon(artwork, for: target) else {
             return store
         }
@@ -192,7 +195,7 @@ final class IconResolverTests: XCTestCase {
     /// matters: the redraw is bounded by the work, not by a re-entrant cascade.
     func testABatchSettlesWithoutANotificationStorm() {
         let store = makeStore()
-        let artwork = IconTestSupport.makeImage(width: 512, height: 512)
+        let artwork = IconTestSupport.makePixelImage(width: 64, height: 64)
         var targets: [IconTarget] = []
         for index in 0..<25 {
             let target = IconTarget.file(URL(fileURLWithPath: "/Users/someone/File\(index).pdf"))

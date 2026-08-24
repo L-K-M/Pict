@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import Foundation
 
 /// Pict's URL scheme — how Zap, Jetty and Top Drawer hand an app over to be edited.
@@ -46,8 +48,17 @@ public enum PictURL {
     /// otherwise. Launch Services answers from its registration database, so asking
     /// costs nothing and starts nothing.
     public static func installedAppURL() -> URL? {
+        #if canImport(AppKit)
         guard let probe else { return nil }
         return NSWorkspace.shared.urlForApplication(toOpen: probe)
+        #else
+        // Launch Services' Linux analogue: the XDG default handler registered for the
+        // scheme. A non-empty handler name means Pict is installed; resolve it to the
+        // .desktop file when we can, else still report installed (a scheme URL marker).
+        guard let handler = capture("xdg-mime", ["query", "default", "x-scheme-handler/\(scheme)"]),
+              !handler.isEmpty else { return nil }
+        return desktopEntryURL(named: handler) ?? URL(string: "\(scheme)://")
+        #endif
     }
 
     /// Where to send someone who hasn't got it.
@@ -58,8 +69,62 @@ public enum PictURL {
     @discardableResult
     public static func open(selecting target: IconTarget?) -> Bool {
         guard let url = target.flatMap(edit) ?? probe else { return false }
+        #if canImport(AppKit)
         return NSWorkspace.shared.open(url)
+        #else
+        return launch("xdg-open", [url.absoluteString])
+        #endif
     }
+
+    #if !canImport(AppKit)
+    // MARK: Linux (XDG)
+
+    /// The `.desktop` file for a handler name, searched across the XDG application
+    /// directories, or `nil` if it isn't found there.
+    private static func desktopEntryURL(named handler: String) -> URL? {
+        let leaf = (handler as NSString).lastPathComponent
+        guard !leaf.isEmpty else { return nil }
+        var roots = [FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".local/share/applications", isDirectory: true)]
+        let dataDirs = ProcessInfo.processInfo.environment["XDG_DATA_DIRS"] ?? "/usr/local/share:/usr/share"
+        for dir in dataDirs.split(separator: ":") where !dir.isEmpty {
+            roots.append(URL(fileURLWithPath: String(dir), isDirectory: true)
+                .appendingPathComponent("applications", isDirectory: true))
+        }
+        for root in roots {
+            let candidate = root.appendingPathComponent(leaf)
+            if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+        }
+        return nil
+    }
+
+    /// Runs `command arguments` (resolved via `PATH`), returning its trimmed stdout,
+    /// or `nil` if it couldn't be launched or exited non-zero.
+    private static func capture(_ command: String, _ arguments: [String]) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = [command] + arguments
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Launches `command arguments` (resolved via `PATH`), returning whether it
+    /// started — the fire-and-forget contract `open(selecting:)` promises.
+    private static func launch(_ command: String, _ arguments: [String]) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = [command] + arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        return (try? process.run()) != nil
+    }
+    #endif
 
     /// Parses an incoming URL. Anything unrecognised opens the editor with nothing
     /// selected rather than being refused — a malformed deep link should land the
