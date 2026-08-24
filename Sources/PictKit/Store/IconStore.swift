@@ -1,4 +1,6 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 
 /// The shared store: the user's icon overrides, in one directory that Zap, Jetty,
@@ -92,6 +94,7 @@ public final class IconStore {
                                         extensions: Self.imageExtensions)
     }
 
+    #if canImport(CoreGraphics)
     /// Decodes the override for `target`, or `nil` when there isn't one.
     public func image(for target: IconTarget) -> CGImage? {
         guard let url = imageURL(for: target) else { return nil }
@@ -100,6 +103,7 @@ public final class IconStore {
         case .failure: return nil
         }
     }
+    #endif
 
     /// Re-reads the directory, discarding any in-memory state. Called by
     /// `IconStoreWatcher` when another process writes.
@@ -112,6 +116,7 @@ public final class IconStore {
 
     // MARK: Writing
 
+    #if canImport(CoreGraphics)
     /// Why a write didn't happen.
     public enum WriteFailure: Error, Equatable {
         /// The image was rejected — too big, unreadable, not encodable.
@@ -165,6 +170,7 @@ public final class IconStore {
         retireLessSpecificKeys(for: target, keeping: key)
         return .success(entry)
     }
+    #endif
 
     /// Pins `target` to the system icon — no substitution, no recovery, no override.
     ///

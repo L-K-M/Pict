@@ -1,0 +1,37 @@
+name: Linux CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Manual runs, matching ci.yml: dispatch goes through the API, so it still
+  # starts a run when webhook delivery is throttled, and re-running CI needs no
+  # empty commit.
+  workflow_dispatch:
+
+# Cancel an in-progress run when a branch is pushed again.
+concurrency:
+  group: linux-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & Test PictKit (Linux)
+    runs-on: ubuntu-latest
+    # swift:6.3-noble == swift:6.3 (Ubuntu 24.04); the toolchain that ships the
+    # Linux Foundation these files are ported against.
+    container: swift:6.3-noble
+    steps:
+      - uses: actions/checkout@v4
+
+      # SwiftPM shells out to git to resolve packages; inside the container the
+      # checkout is owned by a different uid than the one running the build, which
+      # git refuses to touch until the workspace is marked safe.
+      - name: Mark the workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Build
+        run: swift build -v
+
+      - name: Test
+        run: swift test -v
