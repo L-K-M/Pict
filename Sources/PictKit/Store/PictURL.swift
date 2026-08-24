@@ -71,6 +71,10 @@ public enum PictURL {
 
     /// Opens Pict at `target`, or just opens Pict when there is nothing to select.
     /// Returns whether anything was opened.
+    ///
+    /// **On Linux the first call blocks briefly** — the one-time `xdg-mime` spawn behind
+    /// `registeredSchemeHandler` — so if this is reachable from UI code, call or pre-warm
+    /// it off the main thread.
     @discardableResult
     public static func open(selecting target: IconTarget?) -> Bool {
         guard let url = target.flatMap(edit) ?? probe else { return false }
@@ -115,7 +119,9 @@ public enum PictURL {
                 .appendingPathComponent(".local/share", isDirectory: true).path
         var roots = [URL(fileURLWithPath: dataHome, isDirectory: true)
             .appendingPathComponent("applications", isDirectory: true)]
-        let dataDirs = ProcessInfo.processInfo.environment["XDG_DATA_DIRS"] ?? "/usr/local/share:/usr/share"
+        // Set-but-empty means unset here too (XDG spec / GLib).
+        let dataDirs = ProcessInfo.processInfo.environment["XDG_DATA_DIRS"].flatMap { $0.isEmpty ? nil : $0 }
+            ?? "/usr/local/share:/usr/share"
         for dir in dataDirs.split(separator: ":") where dir.hasPrefix("/") {
             roots.append(URL(fileURLWithPath: String(dir), isDirectory: true)
                 .appendingPathComponent("applications", isDirectory: true))
