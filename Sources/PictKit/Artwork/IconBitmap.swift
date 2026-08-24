@@ -27,6 +27,17 @@ public enum IconBitmap {
         return max(IconImageValidator.Limits.warnBelowPixels, pixels)
     }
 
+    /// The `PixelImage` counterpart of `downsample(_ image: CGImage, …)` — the seam's
+    /// pure raster path (Linux's only backend; exercised by tests on macOS).
+    public static func downsample(_ image: PixelImage, longestEdge: Int) -> PixelImage {
+        image.downsample(longestEdge: longestEdge)
+    }
+
+    /// The `PixelImage` counterpart of `maskingCorners(_ image: CGImage, …)`.
+    public static func maskingCorners(_ image: PixelImage, radiusFraction: Double) -> PixelImage {
+        image.maskingCorners(radiusFraction: radiusFraction)
+    }
+
     #if canImport(CoreGraphics)
     /// Resamples `image` so its longest edge is `longestEdge`, never upscaling.
     public static func downsample(_ image: CGImage, longestEdge: Int) -> CGImage {
