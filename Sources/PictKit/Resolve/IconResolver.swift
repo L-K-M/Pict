@@ -293,8 +293,10 @@ public final class IconResolver {
         // canvas, so one point size suffices. Assert it, so a future change that breaks
         // the invariant is caught in debug rather than drawing a distorted aspect ratio.
         assert(sized.width == sized.height, "ResolvedIconImage.pointSize assumes a square canvas")
-        return .image(ResolvedIconImage(pixels: sized,
-                                        pointSize: Double(sized.width) / Double(options.scale)))
+        // Derive from the shorter side so a future non-square regression degrades
+        // gracefully in release (never an inflated dimension) rather than distorting.
+        let side = Double(min(sized.width, sized.height))
+        return .image(ResolvedIconImage(pixels: sized, pointSize: side / Double(options.scale)))
         #endif
     }
 
@@ -302,6 +304,9 @@ public final class IconResolver {
     /// `CGImage`, so the hot-path pipeline stays Core Graphics; a wrapper that borrowed
     /// an identifier borrowed the artwork behind it, so this stays keyed by identifier.
     /// Linux has no bundle equivalent — icon-theme lookup lands in LP-24 — so it misses.
+    ///
+    /// Mirrors `BundleArtworkProvider` (Resolve/ArtworkProviding.swift), which feeds the
+    /// status path; keep the two identifier-keyed reads in sync (LP-24 must update both).
     private func bundleArtwork(for target: IconTarget) -> PipelineImage? {
         #if canImport(AppKit)
         guard case .application(_, let bundleIdentifier) = target, let bundleIdentifier else { return nil }

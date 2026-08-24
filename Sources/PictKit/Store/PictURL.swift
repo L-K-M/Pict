@@ -48,23 +48,27 @@ public enum PictURL {
     /// otherwise. Launch Services answers from its registration database, so asking
     /// costs nothing and starts nothing.
     ///
-    /// **On Linux the result is an installed-or-not check, not an app location:** it is
-    /// the handler's `.desktop` file when locatable, else a bare `pict://` marker. Treat
-    /// a non-nil return as presence, not a path to open or reveal.
+    /// **On Linux this returns the handler's `.desktop` file when it can be located, or
+    /// `nil` otherwise — always a real file URL, never a marker.** For a pure "is Pict
+    /// installed" check that doesn't depend on locating the file, use `isInstalled`. The
+    /// first Linux call blocks (spawns xdg-mime), so call it off the main thread.
     public static func installedAppURL() -> URL? {
         #if canImport(AppKit)
         guard let probe else { return nil }
         return NSWorkspace.shared.urlForApplication(toOpen: probe)
         #else
-        // Launch Services' Linux analogue: the XDG default handler registered for the
-        // scheme (queried once via `registeredSchemeHandler`). A non-empty name means
-        // Pict is installed; resolve it to the .desktop file when we can, else still
-        // report installed (a scheme URL marker). **Blocks** (spawns xdg-mime on first
-        // use), so call this off the main thread.
-        guard let handler = registeredSchemeHandler, !handler.isEmpty else { return nil }
-        return desktopEntryURL(named: handler) ?? URL(string: "\(scheme)://")
+        guard let handler = registeredSchemeHandler(), !handler.isEmpty else { return nil }
+        return desktopEntryURL(named: handler)
         #endif
     }
+
+    #if !canImport(AppKit)
+    /// Whether a default handler for Pict's scheme is registered — the Linux presence
+    /// check, split from the location `installedAppURL()` returns so callers never see a
+    /// fabricated marker URL. Blocks on first use (spawns xdg-mime); call off the main
+    /// thread.
+    public static var isInstalled: Bool { registeredSchemeHandler()?.isEmpty == false }
+    #endif
 
     /// Where to send someone who hasn't got it.
     public static var homepage: URL? { URL(string: "https://github.com/L-K-M/Pict") }
@@ -73,8 +77,8 @@ public enum PictURL {
     /// Returns whether anything was opened.
     ///
     /// **On Linux the first call blocks briefly** — the one-time `xdg-mime` spawn behind
-    /// `registeredSchemeHandler` — so if this is reachable from UI code, call or pre-warm
-    /// it off the main thread.
+    /// `registeredSchemeHandler()` — so if this is reachable from UI code, call or
+    /// pre-warm it off the main thread.
     @discardableResult
     public static func open(selecting target: IconTarget?) -> Bool {
         guard let url = target.flatMap(edit) ?? probe else { return false }
@@ -86,7 +90,7 @@ public enum PictURL {
         // NSWorkspace.open does. Gate on a registered scheme handler (the Bool's real
         // contract), rather than on installedAppURL() which also locates the .desktop
         // file — a separate, slower concern.
-        guard let handler = registeredSchemeHandler, !handler.isEmpty else { return false }
+        guard let handler = registeredSchemeHandler(), !handler.isEmpty else { return false }
         return launch("xdg-open", [url.absoluteString])
         #endif
     }
@@ -94,11 +98,21 @@ public enum PictURL {
     #if !canImport(AppKit)
     // MARK: Linux (XDG)
 
-    /// The XDG default handler for Pict's scheme, queried once. `xdg-mime` is a shell
-    /// script (it may chain gio/xprop), so a per-call spawn is too heavy for what was a
-    /// free Launch Services lookup on macOS; scheme registrations don't change mid-run.
-    private static let registeredSchemeHandler: String? =
-        capture("xdg-mime", ["query", "default", "x-scheme-handler/\(scheme)"])
+    private static let handlerLock = NSLock()
+    private static var cachedSchemeHandler: String?
+
+    /// The XDG default handler for Pict's scheme. `xdg-mime` is a shell script (it may
+    /// chain gio/xprop), so a per-call spawn is too heavy for what was a free Launch
+    /// Services lookup on macOS — but a *negative* result must not be frozen (Launch
+    /// Services is dynamic; a user can install Pict, or make it the default, mid-run).
+    /// So a registered handler is cached, and a nil/empty probe is re-run next call.
+    private static func registeredSchemeHandler() -> String? {
+        handlerLock.lock()
+        defer { handlerLock.unlock() }
+        if let cached = cachedSchemeHandler, !cached.isEmpty { return cached }
+        cachedSchemeHandler = capture("xdg-mime", ["query", "default", "x-scheme-handler/\(scheme)"])
+        return cachedSchemeHandler
+    }
 
     /// `/usr/bin/env` resolves a command via `PATH`, but the path isn't universal
     /// (NixOS, minimal containers); fall back to `/bin/env`.
@@ -127,8 +141,13 @@ public enum PictURL {
                 .appendingPathComponent("applications", isDirectory: true))
         }
         for root in roots {
-            let candidate = root.appendingPathComponent(leaf)
-            if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+            // A desktop-file ID encodes each `applications/` subdirectory as `-`
+            // (`foo-bar.desktop` → `applications/foo/bar.desktop`), so try the
+            // dash-to-slash translation as well as the literal leaf.
+            for relative in [leaf.replacingOccurrences(of: "-", with: "/"), leaf] {
+                let candidate = root.appendingPathComponent(relative)
+                if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+            }
         }
         return nil
     }
@@ -157,11 +176,11 @@ public enum PictURL {
         process.arguments = [command] + arguments
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
-        guard (try? process.run()) != nil else { return false }
-        // Reap the child off the caller's thread so it doesn't linger as a zombie for
-        // the app's lifetime (corelibs-foundation doesn't auto-reap); fire-and-forget.
-        DispatchQueue.global(qos: .utility).async { process.waitUntilExit() }
-        return true
+        // Fire-and-forget: a termination handler makes Foundation reap the child
+        // asynchronously so it doesn't linger as a zombie (don't also call
+        // waitUntilExit). Set before run() so a fast exit can't be missed.
+        process.terminationHandler = { _ in }
+        return (try? process.run()) != nil
     }
     #endif
 

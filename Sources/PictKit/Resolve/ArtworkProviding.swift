@@ -19,6 +19,8 @@ public protocol ArtworkProviding: Sendable {
 public struct BundleArtworkProvider: ArtworkProviding {
     public init() {}
     public func artwork(for target: IconTarget) -> PixelImage? {
+        // Mirrors IconResolver.bundleArtwork(for:) (the resolve hot path); keep the
+        // identifier-keyed behaviour in sync (LP-24 icon-theme lookup must update both).
         guard case .application(_, let bundleIdentifier) = target, let bundleIdentifier,
               let image = BundleArtwork.image(forBundleID: bundleIdentifier) else { return nil }
         return PixelImage(cgImage: image)
