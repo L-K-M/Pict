@@ -43,8 +43,12 @@ final class IconResolverTests: XCTestCase {
     /// apps store, so this exercises the same rung they do.
     private func seededStore(for target: IconTarget) -> IconStore {
         let store = makeStore()
+        // 64 px keeps the pure-Swift PNG encode/decode cheap in the debug test build
+        // (512 px made the 25-icon batch test take ~2 min on Linux); no assertion here
+        // exercises image size, so the smaller fixture loses no coverage.
         let artwork = IconTestSupport.makePixelImage(width: 64, height: 64)
         guard case .success = store.setIcon(artwork, for: target) else {
+            XCTFail("couldn't seed the store")
             return store
         }
         return store

@@ -283,7 +283,10 @@ public final class IconResolver {
                             height: CGFloat(sized.height) / options.scale)
         return .image(NSImage(cgImage: sized, size: points))
         #else
-        // Square by construction (the canvas is `targetExtent`), so one point size.
+        // Square by construction: `normalize` renders into a `canvasSide × canvasSide`
+        // canvas, so one point size suffices. Assert it, so a future change that breaks
+        // the invariant is caught in debug rather than drawing a distorted aspect ratio.
+        assert(sized.width == sized.height, "ResolvedIconImage.pointSize assumes a square canvas")
         return .image(ResolvedIconImage(pixels: sized,
                                         pointSize: Double(sized.width) / Double(options.scale)))
         #endif

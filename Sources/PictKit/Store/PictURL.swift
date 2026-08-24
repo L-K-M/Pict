@@ -78,9 +78,12 @@ public enum PictURL {
         #else
         // `xdg-open` spawns happily even when no handler is registered for the scheme
         // (it then exits non-zero), so its launch can't stand in for "opened" the way
-        // NSWorkspace.open does. Gate on a registered handler first, so the Bool keeps
-        // its contract and a caller can route to the install fallback when it's false.
-        guard installedAppURL() != nil else { return false }
+        // NSWorkspace.open does. Gate on a registered scheme handler directly — the
+        // Bool's real contract — rather than on installedAppURL(), which additionally
+        // depends on locating the .desktop file (a separate concern, with a wasted
+        // filesystem search here).
+        guard let handler = capture("xdg-mime", ["query", "default", "x-scheme-handler/\(scheme)"]),
+              !handler.isEmpty else { return false }
         return launch("xdg-open", [url.absoluteString])
         #endif
     }
@@ -94,8 +97,9 @@ public enum PictURL {
         let leaf = (handler as NSString).lastPathComponent
         guard !leaf.isEmpty else { return nil }
         // The user applications dir is `$XDG_DATA_HOME/applications`, defaulting to
-        // ~/.local/share/applications; then the system `$XDG_DATA_DIRS`.
-        let dataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"]
+        // ~/.local/share/applications; then the system `$XDG_DATA_DIRS`. Per the XDG
+        // spec an unset *or empty* XDG_DATA_HOME means the default.
+        let dataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"].flatMap { $0.isEmpty ? nil : $0 }
             ?? FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".local/share", isDirectory: true).path
         var roots = [URL(fileURLWithPath: dataHome, isDirectory: true)
