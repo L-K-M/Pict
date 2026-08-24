@@ -119,7 +119,63 @@ public enum IconNormalizer {
         return min(max(bleed, 0), maximumBleed)
     }
 
-    // MARK: Rendering
+    // MARK: Rendering (PixelImage — both platforms)
+
+    /// The `PixelImage` counterpart of `normalize(_ image: CGImage, …)`: same trim,
+    /// equal-ink scale and optional baked shadow, on the pure raster backend. On
+    /// Linux it is the shipping path; on macOS it exists to be exercised by tests
+    /// (the app still renders through Core Graphics). Returns the input unchanged if
+    /// it carries no ink.
+    public static func normalize(_ image: PixelImage, targetExtent: Int, bleed: Double,
+                                 trim: Bool, shadow: Bool) -> PixelImage {
+        guard targetExtent > 0 else { return image }
+        let canvasSide = Int(canvasExtent(targetExtent: Double(targetExtent), bleed: bleed).rounded())
+        guard canvasSide > 0 else { return image }
+
+        guard let mask = AlphaMask(pixelImage: image, longestEdge: trimResolution) else { return image }
+        let threshold = IconShapeClassifier.inkThreshold
+        let inked = mask.inkCount(threshold: threshold)
+        guard inked > 0, let bounds = mask.inkBounds(threshold: threshold) else { return image }
+
+        // Mask row 0 is the top row, matching the crop's upper-left origin.
+        let cellWidth = Double(image.width) / Double(mask.width)
+        let cellHeight = Double(image.height) / Double(mask.height)
+
+        let source: PixelImage
+        let inkFraction: Double
+        if trim {
+            source = image.cropped(x: Int(Double(bounds.minColumn) * cellWidth),
+                                   y: Int(Double(bounds.minRow) * cellHeight),
+                                   width: Int((Double(bounds.columnCount) * cellWidth).rounded()),
+                                   height: Int((Double(bounds.rowCount) * cellHeight).rounded()))
+            inkFraction = Double(inked) / Double(bounds.columnCount * bounds.rowCount)
+        } else {
+            source = image
+            inkFraction = Double(inked) / Double(mask.width * mask.height)
+        }
+
+        let scaling = layout(inkFraction: inkFraction,
+                             trimmedWidth: Double(source.width),
+                             trimmedHeight: Double(source.height),
+                             targetExtent: Double(targetExtent),
+                             bleed: bleed)
+        return renderPixel(source, scaling: scaling, canvasSide: canvasSide, shadow: shadow)
+    }
+
+    private static func renderPixel(_ source: PixelImage, scaling: Layout,
+                                    canvasSide: Int, shadow: Bool) -> PixelImage {
+        let scaledWidth = Swift.max(1, Int((Double(source.width) * scaling.scale).rounded()))
+        let scaledHeight = Swift.max(1, Int((Double(source.height) * scaling.scale).rounded()))
+        let placed = source
+            .resampled(toWidth: scaledWidth, height: scaledHeight)
+            .centred(onCanvasSide: canvasSide)
+        guard shadow else { return placed }
+        return placed.withDropShadow(offsetFraction: shadowOffsetFraction,
+                                     blurFraction: shadowBlurFraction,
+                                     alpha: shadowAlpha)
+    }
+
+    // MARK: Rendering (Core Graphics)
 
     #if canImport(CoreGraphics)
     /// Trims, scales and (optionally) shadows `image` into a square canvas of

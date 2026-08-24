@@ -35,6 +35,9 @@ let pictKitSources: [String]? = [
     "Artwork/IconImageValidator.swift",
     "Artwork/IconBitmap.swift",
     "Resolve/IconRenderOptions.swift",
+    // LP-04: pure-Swift raster backend + the Linux PNG codec (swift-png).
+    "Artwork/PixelImageOps.swift",
+    "Artwork/LinuxCodec.swift",
 ]
 let pictKitTestsSources: [String]? = [
     "IconEntryKeyTests.swift",
@@ -46,6 +49,10 @@ let pictKitTestsSources: [String]? = [
     "IconShapeClassifierTests.swift",
     "IconNormalizerTests.swift",
     "IconImageValidatorTests.swift",
+    // LP-04: the raster backend fixtures + render/codec suites.
+    "IconTestSupport.swift",
+    "PixelImageRenderTests.swift",
+    "PixelImageCodecTests.swift",
 ]
 #else
 let pictKitSources: [String]? = nil
@@ -58,8 +65,20 @@ let package = Package(
     products: [
         .library(name: "PictKit", targets: ["PictKit"])
     ],
+    dependencies: [
+        // The Linux PNG codec (LP-04). Pure Swift, no zlib/C deps; added Linux-only
+        // via the product condition below so the Xcode build never acquires it —
+        // macOS keeps decoding/encoding through ImageIO in IconImageValidator.
+        .package(url: "https://github.com/tayloraswift/swift-png.git", from: "4.5.0"),
+    ],
     targets: [
-        .target(name: "PictKit", sources: pictKitSources),
+        .target(
+            name: "PictKit",
+            dependencies: [
+                .product(name: "PNG", package: "swift-png", condition: .when(platforms: [.linux])),
+            ],
+            sources: pictKitSources
+        ),
         .testTarget(name: "PictKitTests", dependencies: ["PictKit"],
                     sources: pictKitTestsSources)
     ]

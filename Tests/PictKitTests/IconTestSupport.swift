@@ -1,4 +1,6 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 @testable import PictKit
 
@@ -8,6 +10,36 @@ enum IconTestSupport {
 
     // MARK: Images
 
+    /// A `PixelImage` fixture — a solid rectangle (`filled`) or a centred ellipse,
+    /// fully opaque so premultiplied and straight alpha coincide. The pure raster
+    /// backend's counterpart of `makeImage`, so the seam's tests run on both
+    /// platforms (LP-04).
+    static func makePixelImage(width: Int, height: Int, filled: Bool = true) -> PixelImage {
+        // The same colour makeImage fills with: sRGB (0.2, 0.6, 0.9) ≈ (51, 153, 230).
+        let r: UInt8 = 51, g: UInt8 = 153, b: UInt8 = 230
+        var samples = [UInt8](repeating: 0, count: width * height * 4)
+        let centreX = Double(width) / 2, centreY = Double(height) / 2
+        let radiusX = Double(width) / 2, radiusY = Double(height) / 2
+        for row in 0..<height {
+            for column in 0..<width {
+                let inside: Bool
+                if filled {
+                    inside = true
+                } else {
+                    let dx = (Double(column) + 0.5 - centreX) / radiusX
+                    let dy = (Double(row) + 0.5 - centreY) / radiusY
+                    inside = dx * dx + dy * dy <= 1
+                }
+                if inside {
+                    let i = (row * width + column) * 4
+                    samples[i] = r; samples[i + 1] = g; samples[i + 2] = b; samples[i + 3] = 255
+                }
+            }
+        }
+        return PixelImage(width: width, height: height, samples: samples)!
+    }
+
+    #if canImport(CoreGraphics)
     /// A solid rectangle (`filled`) or a centred ellipse, so tests can pick a
     /// full-bleed or a free-form shape.
     static func makeImage(width: Int, height: Int, filled: Bool = true) -> CGImage {
@@ -35,6 +67,7 @@ enum IconTestSupport {
         }
         return url
     }
+    #endif
 
     // MARK: Directories
 
