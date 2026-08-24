@@ -57,10 +57,11 @@ public enum PictURL {
         return NSWorkspace.shared.urlForApplication(toOpen: probe)
         #else
         // Launch Services' Linux analogue: the XDG default handler registered for the
-        // scheme. A non-empty handler name means Pict is installed; resolve it to the
-        // .desktop file when we can, else still report installed (a scheme URL marker).
-        guard let handler = capture("xdg-mime", ["query", "default", "x-scheme-handler/\(scheme)"]),
-              !handler.isEmpty else { return nil }
+        // scheme (queried once via `registeredSchemeHandler`). A non-empty name means
+        // Pict is installed; resolve it to the .desktop file when we can, else still
+        // report installed (a scheme URL marker). **Blocks** (spawns xdg-mime on first
+        // use), so call this off the main thread.
+        guard let handler = registeredSchemeHandler, !handler.isEmpty else { return nil }
         return desktopEntryURL(named: handler) ?? URL(string: "\(scheme)://")
         #endif
     }
@@ -78,12 +79,10 @@ public enum PictURL {
         #else
         // `xdg-open` spawns happily even when no handler is registered for the scheme
         // (it then exits non-zero), so its launch can't stand in for "opened" the way
-        // NSWorkspace.open does. Gate on a registered scheme handler directly — the
-        // Bool's real contract — rather than on installedAppURL(), which additionally
-        // depends on locating the .desktop file (a separate concern, with a wasted
-        // filesystem search here).
-        guard let handler = capture("xdg-mime", ["query", "default", "x-scheme-handler/\(scheme)"]),
-              !handler.isEmpty else { return false }
+        // NSWorkspace.open does. Gate on a registered scheme handler (the Bool's real
+        // contract), rather than on installedAppURL() which also locates the .desktop
+        // file — a separate, slower concern.
+        guard let handler = registeredSchemeHandler, !handler.isEmpty else { return false }
         return launch("xdg-open", [url.absoluteString])
         #endif
     }
@@ -91,21 +90,33 @@ public enum PictURL {
     #if !canImport(AppKit)
     // MARK: Linux (XDG)
 
+    /// The XDG default handler for Pict's scheme, queried once. `xdg-mime` is a shell
+    /// script (it may chain gio/xprop), so a per-call spawn is too heavy for what was a
+    /// free Launch Services lookup on macOS; scheme registrations don't change mid-run.
+    private static let registeredSchemeHandler: String? =
+        capture("xdg-mime", ["query", "default", "x-scheme-handler/\(scheme)"])
+
+    /// `/usr/bin/env` resolves a command via `PATH`, but the path isn't universal
+    /// (NixOS, minimal containers); fall back to `/bin/env`.
+    private static let envURL = URL(fileURLWithPath:
+        ["/usr/bin/env", "/bin/env"].first { FileManager.default.fileExists(atPath: $0) } ?? "/usr/bin/env")
+
     /// The `.desktop` file for a handler name, searched across the XDG application
     /// directories, or `nil` if it isn't found there.
     private static func desktopEntryURL(named handler: String) -> URL? {
         let leaf = (handler as NSString).lastPathComponent
         guard !leaf.isEmpty else { return nil }
         // The user applications dir is `$XDG_DATA_HOME/applications`, defaulting to
-        // ~/.local/share/applications; then the system `$XDG_DATA_DIRS`. Per the XDG
-        // spec an unset *or empty* XDG_DATA_HOME means the default.
-        let dataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"].flatMap { $0.isEmpty ? nil : $0 }
+        // ~/.local/share/applications; then the system `$XDG_DATA_DIRS`. The XDG spec
+        // requires these absolute — a set-but-relative (or empty) value is ignored, as
+        // GLib does — so `hasPrefix("/")` gates both, avoiding CWD-relative probes.
+        let dataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"].flatMap { $0.hasPrefix("/") ? $0 : nil }
             ?? FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".local/share", isDirectory: true).path
         var roots = [URL(fileURLWithPath: dataHome, isDirectory: true)
             .appendingPathComponent("applications", isDirectory: true)]
         let dataDirs = ProcessInfo.processInfo.environment["XDG_DATA_DIRS"] ?? "/usr/local/share:/usr/share"
-        for dir in dataDirs.split(separator: ":") where !dir.isEmpty {
+        for dir in dataDirs.split(separator: ":") where dir.hasPrefix("/") {
             roots.append(URL(fileURLWithPath: String(dir), isDirectory: true)
                 .appendingPathComponent("applications", isDirectory: true))
         }
@@ -120,7 +131,7 @@ public enum PictURL {
     /// or `nil` if it couldn't be launched or exited non-zero.
     private static func capture(_ command: String, _ arguments: [String]) -> String? {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.executableURL = envURL
         process.arguments = [command] + arguments
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -136,11 +147,15 @@ public enum PictURL {
     /// started — the fire-and-forget contract `open(selecting:)` promises.
     private static func launch(_ command: String, _ arguments: [String]) -> Bool {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.executableURL = envURL
         process.arguments = [command] + arguments
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
-        return (try? process.run()) != nil
+        guard (try? process.run()) != nil else { return false }
+        // Reap the child off the caller's thread so it doesn't linger as a zombie for
+        // the app's lifetime (corelibs-foundation doesn't auto-reap); fire-and-forget.
+        DispatchQueue.global(qos: .utility).async { process.waitUntilExit() }
+        return true
     }
     #endif
 

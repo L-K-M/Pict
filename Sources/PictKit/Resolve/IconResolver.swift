@@ -1,8 +1,9 @@
 #if canImport(AppKit)
 import AppKit
 #endif
-// CoreGraphics under its own gate so it always matches the `PipelineImage` seam below
-// (which keys on `canImport(CoreGraphics)`), rather than riding on the AppKit gate.
+// CoreGraphics under its own gate — a superset of the `canImport(AppKit)` the image
+// types use below: it's imported wherever CGImage might exist, and CGImage is only
+// referenced on the AppKit path, so the import is never missing where it's needed.
 #if canImport(CoreGraphics)
 import CoreGraphics
 #else
@@ -30,7 +31,12 @@ public struct ResolvedIconImage: Sendable, Equatable {
 /// shipping path, untouched), the pure raster `PixelImage` on Linux. Every pipeline
 /// step — `store.image(for:)`, the bundle read, classify/mask/normalize — has an
 /// overload for each, so `resolve()` is written once against this alias.
-#if canImport(CoreGraphics)
+///
+/// Gated on `canImport(AppKit)` to match `ResolvedIconImage` and `resolve()`'s final
+/// construction — this package assumes CoreGraphics and AppKit travel together (true
+/// on its macOS and Linux targets); a CoreGraphics-without-AppKit target would need
+/// these three gates reconciled first.
+#if canImport(AppKit)
 private typealias PipelineImage = CGImage
 #else
 private typealias PipelineImage = PixelImage
