@@ -32,9 +32,11 @@ final class IconStoreTests: XCTestCase {
     ///
     /// Deliberately small: these tests encode a PNG on every `setIcon`, and the Linux
     /// codec is pure Swift running in an unoptimised test build, where compression time
-    /// scales with pixel count. 48 px keeps the round-trip honest without paying for
-    /// pixels no assertion here looks at.
-    private func makeImage(side: Int = 48) -> PixelImage {
+    /// scales with pixel count. 64 px is the smallest that still round-trips on both
+    /// platforms — `image(for:)` on macOS decodes through `IconImageValidator`, which
+    /// rejects anything under `Limits.hardMinimumPixels` (64), while the Linux codec has
+    /// no such floor. Kept at exactly that minimum to keep the encode cheap.
+    private func makeImage(side: Int = 64) -> PixelImage {
         IconTestSupport.makePixelImage(width: side, height: side)
     }
 
