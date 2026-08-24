@@ -109,8 +109,14 @@ public final class IconStore {
     /// Decodes the override for `target` as a `PixelImage` (Linux), or `nil` when
     /// there isn't one — the read half of the codec seam, through swift-png (LP-04).
     public func image(for target: IconTarget) -> PixelImage? {
-        guard let url = imageURL(for: target) else { return nil }
-        return LinuxCodec().decode(url)
+        guard let url = imageURL(for: target), let image = LinuxCodec().decode(url) else { return nil }
+        // Apply the same accept/reject policy the macOS path gets from
+        // `IconImageValidator.decode` (min/max pixels, aspect), so the two platforms
+        // treat the same store contents identically. `LinuxCodec`'s own pre-decompress
+        // cap already bounds the allocation; this adds the icon-size floor on top.
+        guard case .success = IconImageValidator.check(pixelWidth: image.width,
+                                                       pixelHeight: image.height) else { return nil }
+        return image
     }
     #endif
 
@@ -323,6 +329,11 @@ public final class IconStore {
             try LinuxCodec().encodePNG(image, to: url)
             return .success(())
         } catch {
+            // Matches the directory-creation failure above: a genuine I/O error
+            // (disk full, permission) is reported as `.notEncodable` like the macOS
+            // path, but logged so the underlying cause is diagnosable from the field.
+            NSLog("PictKit: couldn't encode the icon PNG at %@: %@",
+                  url.path, String(describing: error))
             return .failure(.notEncodable)
         }
         #endif

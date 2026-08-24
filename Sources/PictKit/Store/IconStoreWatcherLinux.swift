@@ -31,14 +31,19 @@ public final class IconStoreWatcher {
         static let movedTo: UInt32    = 0x0000_0080  // IN_MOVED_TO
         static let movedFrom: UInt32  = 0x0000_0040  // IN_MOVED_FROM
         static let closeWrite: UInt32 = 0x0000_0008  // IN_CLOSE_WRITE
+        static let moveSelf: UInt32   = 0x0000_0800  // IN_MOVE_SELF
     }
     /// What a settled entries directory is watched for: any write another app makes.
     /// MOVED_FROM as well as MOVED_TO, so an override removed by renaming a file *out*
-    /// of the store notifies just like an unlink (DELETE) does.
+    /// of the store notifies just like an unlink (DELETE) does; MOVE_SELF so the whole
+    /// store being renamed away is noticed (the path stops resolving → re-arm).
     private static let directoryMask = Mask.create | Mask.movedTo | Mask.delete
-                                     | Mask.closeWrite | Mask.movedFrom
+                                     | Mask.closeWrite | Mask.movedFrom | Mask.moveSelf
     /// What a not-yet-existing directory's parent is watched for, to catch it appear.
     private static let parentMask = Mask.create | Mask.movedTo
+    /// How long to wait before retrying a failed watch — the path (store root) may not
+    /// exist yet on a fresh machine, where FSEvents would watch it natively.
+    private static let retryInterval: TimeInterval = 5.0
 
     private let directory: URL
     private let onChange: () -> Void
@@ -70,10 +75,12 @@ public final class IconStoreWatcher {
         self.onChange = onChange
     }
 
-    // Every closure submitted to `queue` (the event and cancel handlers, the debounce
-    // item) captures `self` weakly or not at all, so the last reference is never
-    // released on the queue itself — `stop()`'s `queue.sync` here cannot deadlock.
-    // Preserve that invariant when adding queue work.
+    // `stop()`'s `queue.sync` in deinit is safe only because no closure submitted to
+    // `queue` releases the last reference to `self` on the queue: the event, cancel and
+    // retry handlers capture `self` weakly, and the debounce item — which needs a
+    // strong `self` to clear `debounce` — hands that strong `self` to a main-queue
+    // block before returning, so its final release lands on main, not here. Preserve
+    // that when adding queue work.
     deinit { stop() }
 
     /// Starts watching. Safe to call twice; the second call does nothing.
@@ -125,26 +132,30 @@ public final class IconStoreWatcher {
 
     // MARK: inotify plumbing (all on `queue`)
 
-    /// Watches `directory` if it exists, else its parent so we notice it appear.
+    /// The single re-arm primitive: watch `directory` if it exists, else its parent so
+    /// we notice it appear. Drops any previous watch first (a re-arm across a
+    /// delete/recreate or a rename-away would otherwise leak the old descriptor, which
+    /// keeps following the moved inode). `watchingParent` flips only on success, and a
+    /// failed `add_watch` — the path doesn't exist yet, even the parent — schedules a
+    /// retry rather than leaving the watcher silent, the inotify stand-in for the way
+    /// FSEvents watches a not-yet-existing root natively.
     private func armWatch() {
         guard fd >= 0 else { return }
+        if watch >= 0 { inotify_rm_watch(fd, watch); watch = -1 }
         let exists = directoryExists(directory)
         let target = exists ? directory : directory.deletingLastPathComponent()
-        watchingParent = !exists
         let mask = exists ? Self.directoryMask : Self.parentMask
-        watch = target.path.withCString { inotify_add_watch(fd, $0, mask) }
-        if watch < 0 {
-            NSLog("PictKit: couldn't watch \(target.path) for icon changes.")
+        let descriptor = target.path.withCString { inotify_add_watch(fd, $0, mask) }
+        guard descriptor >= 0 else {
+            NSLog("PictKit: couldn't watch \(target.path) for icon changes yet; retrying.")
+            queue.asyncAfter(deadline: .now() + Self.retryInterval) { [weak self] in
+                guard let self, self.started else { return }
+                self.armWatch()
+            }
+            return
         }
-    }
-
-    /// Re-arms on the entries directory once it exists — we had been watching the
-    /// parent. Called after an event names the directory appearing.
-    private func promoteToDirectoryWatch() {
-        guard watchingParent, fd >= 0, directoryExists(directory) else { return }
-        if watch >= 0 { inotify_rm_watch(fd, watch) }
-        watch = directory.path.withCString { inotify_add_watch(fd, $0, Self.directoryMask) }
-        watchingParent = false
+        watch = descriptor
+        watchingParent = !exists
     }
 
     /// Reads every pending event (the fd is non-blocking) and, if any of them matter,
@@ -156,17 +167,18 @@ public final class IconStoreWatcher {
         var sawChange = false
         while true {
             let count = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
-            if count <= 0 { break }   // -1/EAGAIN once drained
+            if count == -1, errno == EINTR { continue }   // interrupted by a signal; retry
+            if count <= 0 { break }                        // 0 or -1/EAGAIN once drained
             parse(buffer, count: count, directoryAppeared: &directoryAppeared, change: &sawChange)
         }
         if watchingParent, directoryAppeared {
-            promoteToDirectoryWatch()
+            armWatch()                // the store appeared → watch it directly
             sawChange = true          // the store just appeared; treat it as a change
         } else if !watchingParent, !directoryExists(directory) {
-            // The watched directory was deleted: the kernel drops the watch
-            // (IN_DELETE_SELF/IN_IGNORED) and delivers nothing more on it. Re-arm on
-            // the parent — as at first run — so a recreated store is noticed rather
-            // than going silent; the store vanishing is itself a change.
+            // The watched directory was deleted or renamed away: the kernel drops the
+            // watch (IN_DELETE_SELF/IN_IGNORED) or the path stops resolving (MOVE_SELF).
+            // Re-arm on the parent — as at first run — so a recreated store is noticed
+            // rather than going silent; the store vanishing is itself a change.
             armWatch()
             sawChange = true
         }
@@ -200,10 +212,20 @@ public final class IconStoreWatcher {
         }
     }
 
+    /// Coalesce a burst into one delivery, anchoring the window at its *first* event —
+    /// FSEvents' latency semantics. Re-anchoring on every event (cancel + reschedule)
+    /// would let a steady stream of writes postpone the notification forever; instead,
+    /// once a window is open we fold later events into it and open the next only after
+    /// this one fires. The work item clears `debounce` on `queue` before delivering, so
+    /// a following burst starts a fresh window. It captures `self` weakly and, while
+    /// running, hands a strong `self` to the main-queue block — so it never releases
+    /// the last reference on `queue` (see the invariant noted above `deinit`).
     private func scheduleNotify() {
-        debounce?.cancel()
+        guard debounce == nil else { return }
         let item = DispatchWorkItem { [weak self] in
-            DispatchQueue.main.async { self?.onChange() }
+            guard let self else { return }
+            self.debounce = nil
+            DispatchQueue.main.async { self.onChange() }
         }
         debounce = item
         queue.asyncAfter(deadline: .now() + Self.latency, execute: item)

@@ -61,5 +61,26 @@ final class PixelImageCodecTests: XCTestCase {
     func testDecodeRejectsNonPNGData() {
         XCTAssertNil(LinuxCodec().decode(Data("not a png".utf8)))
     }
+
+    /// A crafted header declaring a gigapixel image must be rejected before swift-png
+    /// decompresses it — the store is a shared directory, so a decode there faces
+    /// untrusted bytes, and a 30000×30000 RGBA decode would allocate ~3.6 GB.
+    func testDecodeRejectsAnOversizedHeaderWithoutDecompressing() throws {
+        let image = IconTestSupport.makePixelImage(width: 8, height: 8, filled: false)
+        let url = directory.appendingPathComponent("bomb.png")
+        let codec = LinuxCodec()
+        try codec.encodePNG(image, to: url)
+
+        // Overwrite the IHDR width/height (big-endian UInt32 at offsets 16 and 20) with
+        // 30000 (0x0000_7530) — past Limits.maximumPixelsPerAxis and maximumTotalPixels.
+        var bytes = [UInt8](try Data(contentsOf: url))
+        for base in [16, 20] {
+            bytes[base] = 0x00; bytes[base + 1] = 0x00; bytes[base + 2] = 0x75; bytes[base + 3] = 0x30
+        }
+        try Data(bytes).write(to: url)
+
+        XCTAssertNil(codec.decode(url), "an oversized IHDR must be rejected before decompressing")
+        XCTAssertNil(codec.decode(try Data(contentsOf: url)))
+    }
 }
 #endif
