@@ -65,7 +65,9 @@ public extension PixelImage {
     init?(cgImage image: CGImage) {
         let width = image.width
         let height = image.height
-        guard width > 0, height > 0 else { return nil }
+        // Same overflow guard as init(width:height:samples:) — a pathological
+        // CGImage must return nil, not trap on the `width * height * 4` allocation.
+        guard width > 0, height > 0, width <= (Int.max / 4) / height else { return nil }
 
         var samples = [UInt8](repeating: 0, count: width * height * 4)
         let space = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()

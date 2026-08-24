@@ -54,8 +54,16 @@ public struct AlphaMask: Equatable {
     /// other failable initializers here, an extreme `longestEdge` returns `nil`
     /// rather than trapping the `Int(_:)` conversion or overflowing the sample
     /// allocation. A sampling grid never needs more than a few hundred cells an edge.
+    /// The valid `longestEdge` range for the samplers. The floor keeps a corner
+    /// radius resolving to several cells; the ceiling bounds the ~`longestEdge`²
+    /// grid allocation. A request outside `minLongestEdge...maxLongestEdge` makes the
+    /// initializers return `nil` rather than trap or over-allocate.
+    public static let minLongestEdge = 8
+    public static let maxLongestEdge = 4096
+
     static func gridSize(sourceWidth: Int, sourceHeight: Int, longestEdge: Int) -> (width: Int, height: Int)? {
-        guard sourceWidth > 0, sourceHeight > 0, longestEdge >= 8, longestEdge <= 4096 else { return nil }
+        guard sourceWidth > 0, sourceHeight > 0,
+              longestEdge >= minLongestEdge, longestEdge <= maxLongestEdge else { return nil }
         let longest = Swift.max(sourceWidth, sourceHeight)
         let gridWidth = Swift.max(1, Int((Double(sourceWidth) / Double(longest) * Double(longestEdge)).rounded()))
         let gridHeight = Swift.max(1, Int((Double(sourceHeight) / Double(longest) * Double(longestEdge)).rounded()))
@@ -63,9 +71,12 @@ public struct AlphaMask: Equatable {
     }
 
     /// Samples a `PixelImage`'s alpha channel onto a grid whose longest edge is
-    /// `longestEdge`, area-averaging each cell's source footprint. The pure-Swift
+    /// `longestEdge` (valid range `minLongestEdge...maxLongestEdge`; out of range
+    /// returns `nil`), area-averaging each cell's source footprint. A box filter, so
+    /// cell values can differ slightly from the CG path's resampling — grid
+    /// dimensions and classification agree, exact samples don't. The pure-Swift
     /// counterpart of `init(image:longestEdge:)`, routed through the same `gridSize`
-    /// and the raw-samples initializer so both platforms measure shapes the same way.
+    /// and the raw-samples initializer.
     public init?(pixelImage: PixelImage, longestEdge: Int) {
         guard let grid = AlphaMask.gridSize(sourceWidth: pixelImage.width,
                                             sourceHeight: pixelImage.height,
@@ -102,7 +113,8 @@ public struct AlphaMask: Equatable {
 
     #if canImport(CoreGraphics)
     /// Samples `image`'s alpha channel onto a grid whose longest edge is
-    /// `longestEdge`, or `nil` when it can't be rasterised.
+    /// `longestEdge` (valid range `minLongestEdge...maxLongestEdge`), or `nil` when
+    /// the request is out of range or it can't be rasterised.
     public init?(image: CGImage, longestEdge: Int) {
         guard let grid = AlphaMask.gridSize(sourceWidth: image.width,
                                             sourceHeight: image.height,
