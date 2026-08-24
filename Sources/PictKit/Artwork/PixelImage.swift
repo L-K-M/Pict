@@ -43,7 +43,13 @@ public struct PixelImage: Equatable, Sendable {
 /// `IconImageValidator`), a pure-Swift PNG codec on Linux (LP-04). Kept deliberately
 /// small — decode, decode-from-data, encode — so a platform only has to implement
 /// the three operations the store and resolver actually need.
-public protocol IconCodec {
+///
+/// **Internal on purpose.** The codec and its callers (store, resolver) all live in
+/// PictKit; `PixelImage` is the type that becomes public API (via LP-06's
+/// `ResolvedIconImage`), not this protocol. Keeping it internal until LP-04's first
+/// conformer exists lets its shape (e.g. `PixelImage?` vs a typed decode error)
+/// settle without a semver-visible change.
+protocol IconCodec {
     func decode(_ url: URL) -> PixelImage?
     func decode(_ data: Data) -> PixelImage?
     func encodePNG(_ image: PixelImage, to url: URL) throws

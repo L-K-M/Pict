@@ -44,6 +44,15 @@ final class PixelImageTests: XCTestCase {
         XCTAssertNil(PixelImage(width: 1 << 31, height: 1 << 31, samples: []))
     }
 
+    /// The pixelImage sampling path is failable too: an extreme `longestEdge` must
+    /// return nil rather than trap the Int conversion / overflow the grid allocation.
+    func testAlphaMaskRejectsAnExtremeLongestEdge() throws {
+        let image = try XCTUnwrap(PixelImage(width: 8, height: 8,
+                                             samples: [UInt8](repeating: 255, count: 8 * 8 * 4)))
+        XCTAssertNil(AlphaMask(pixelImage: image, longestEdge: .max))
+        XCTAssertNil(AlphaMask(pixelImage: image, longestEdge: 4))   // below the >= 8 floor
+    }
+
     #if canImport(CoreGraphics)
 
     // MARK: The Core Graphics bridge (macOS)
@@ -104,16 +113,19 @@ final class PixelImageTests: XCTestCase {
     }
 
     /// Both sampling paths must agree on grid dimensions for *any* aspect ratio —
-    /// the square fixtures above exercise the rounding only trivially. 61/130*48
-    /// rounds to 23, and a one-cell drift between the CG and pure paths would skew
-    /// AlphaProfile only for non-square artwork.
+    /// the square fixtures above exercise the rounding only trivially. Two non-square
+    /// cases: 61/130×48 ≈ 22.52 (rounds the same either way), and 65/130×47 = 23.5
+    /// exactly, the tie-break where half-away-from-zero (24) and truncation (23)
+    /// disagree — so a rounding-rule mismatch between the paths would surface here.
     func testGridDimensionsAgreeAcrossTheSeam() throws {
-        let image = IconTestSupport.makeImage(width: 130, height: 61, filled: true)
-        let pixel = try XCTUnwrap(PixelImage(cgImage: image))
-        let viaCG = try XCTUnwrap(AlphaMask(image: image, longestEdge: 48))
-        let viaPixel = try XCTUnwrap(AlphaMask(pixelImage: pixel, longestEdge: 48))
-        XCTAssertEqual(viaCG.width, viaPixel.width)
-        XCTAssertEqual(viaCG.height, viaPixel.height)
+        for (width, height, edge) in [(130, 61, 48), (130, 65, 47)] {
+            let image = IconTestSupport.makeImage(width: width, height: height, filled: true)
+            let pixel = try XCTUnwrap(PixelImage(cgImage: image))
+            let viaCG = try XCTUnwrap(AlphaMask(image: image, longestEdge: edge))
+            let viaPixel = try XCTUnwrap(AlphaMask(pixelImage: pixel, longestEdge: edge))
+            XCTAssertEqual(viaCG.width, viaPixel.width, "\(width)x\(height)@\(edge)")
+            XCTAssertEqual(viaCG.height, viaPixel.height, "\(width)x\(height)@\(edge)")
+        }
     }
     #endif
 }
