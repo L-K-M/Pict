@@ -33,7 +33,10 @@ public final class IconStoreWatcher {
         static let closeWrite: UInt32 = 0x0000_0008  // IN_CLOSE_WRITE
     }
     /// What a settled entries directory is watched for: any write another app makes.
-    private static let directoryMask = Mask.create | Mask.movedTo | Mask.delete | Mask.closeWrite
+    /// MOVED_FROM as well as MOVED_TO, so an override removed by renaming a file *out*
+    /// of the store notifies just like an unlink (DELETE) does.
+    private static let directoryMask = Mask.create | Mask.movedTo | Mask.delete
+                                     | Mask.closeWrite | Mask.movedFrom
     /// What a not-yet-existing directory's parent is watched for, to catch it appear.
     private static let parentMask = Mask.create | Mask.movedTo
 
@@ -67,6 +70,10 @@ public final class IconStoreWatcher {
         self.onChange = onChange
     }
 
+    // Every closure submitted to `queue` (the event and cancel handlers, the debounce
+    // item) captures `self` weakly or not at all, so the last reference is never
+    // released on the queue itself — `stop()`'s `queue.sync` here cannot deadlock.
+    // Preserve that invariant when adding queue work.
     deinit { stop() }
 
     /// Starts watching. Safe to call twice; the second call does nothing.
@@ -155,6 +162,13 @@ public final class IconStoreWatcher {
         if watchingParent, directoryAppeared {
             promoteToDirectoryWatch()
             sawChange = true          // the store just appeared; treat it as a change
+        } else if !watchingParent, !directoryExists(directory) {
+            // The watched directory was deleted: the kernel drops the watch
+            // (IN_DELETE_SELF/IN_IGNORED) and delivers nothing more on it. Re-arm on
+            // the parent — as at first run — so a recreated store is noticed rather
+            // than going silent; the store vanishing is itself a change.
+            armWatch()
+            sawChange = true
         }
         if sawChange { scheduleNotify() }
     }
