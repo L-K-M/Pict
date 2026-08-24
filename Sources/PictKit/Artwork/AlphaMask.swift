@@ -48,12 +48,6 @@ public struct AlphaMask: Equatable {
         self.samples = samples
     }
 
-    /// Grid dimensions for a `sourceWidth × sourceHeight` source whose longest edge
-    /// maps to `longestEdge` — or `nil` for a degenerate or out-of-range request.
-    /// Both sampling paths route through this, so they cannot drift; and, like the
-    /// other failable initializers here, an extreme `longestEdge` returns `nil`
-    /// rather than trapping the `Int(_:)` conversion or overflowing the sample
-    /// allocation. A sampling grid never needs more than a few hundred cells an edge.
     /// The valid `longestEdge` range for the samplers. The floor keeps a corner
     /// radius resolving to several cells; the ceiling bounds the ~`longestEdge`²
     /// grid allocation. A request outside `minLongestEdge...maxLongestEdge` makes the
@@ -61,6 +55,12 @@ public struct AlphaMask: Equatable {
     public static let minLongestEdge = 8
     public static let maxLongestEdge = 4096
 
+    /// Grid dimensions for a `sourceWidth × sourceHeight` source whose longest edge
+    /// maps to `longestEdge` — or `nil` for a degenerate or out-of-range request.
+    /// Both sampling paths route through this, so they cannot drift; and, like the
+    /// other failable initializers here, an extreme `longestEdge` returns `nil`
+    /// rather than trapping the `Int(_:)` conversion or overflowing the sample
+    /// allocation.
     static func gridSize(sourceWidth: Int, sourceHeight: Int, longestEdge: Int) -> (width: Int, height: Int)? {
         guard sourceWidth > 0, sourceHeight > 0,
               longestEdge >= minLongestEdge, longestEdge <= maxLongestEdge else { return nil }
