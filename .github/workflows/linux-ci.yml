@@ -9,6 +9,12 @@ on:
   # empty commit.
   workflow_dispatch:
 
+# This job only checks out code and runs the build and tests — it never needs a
+# write-scoped token. Pin it to read so a buggy or hostile build/test step run
+# inside the container can't reach anything else with the default token.
+permissions:
+  contents: read
+
 # Cancel an in-progress run when a branch is pushed again.
 concurrency:
   group: linux-ci-${{ github.ref }}
@@ -18,6 +24,9 @@ jobs:
   build-test:
     name: Build & Test PictKit (Linux)
     runs-on: ubuntu-latest
+    # A clean build + test is a couple of minutes; anything approaching this is a
+    # hang. Fail fast instead of burning the 360-minute default.
+    timeout-minutes: 30
     # swift:6.3-noble == swift:6.3 (Ubuntu 24.04); the toolchain that ships the
     # Linux Foundation these files are ported against.
     container: swift:6.3-noble

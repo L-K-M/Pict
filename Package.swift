@@ -15,7 +15,10 @@ import PackageDescription
 // shrinks to nothing as the port lands and is expected here). `#if os(Linux)` in
 // the manifest is evaluated on the build host, so macOS keeps building the entire
 // target (a `nil` `sources:` means "compile everything") and its behaviour is
-// untouched.
+// untouched. Caveat: this is host-keyed, not target-keyed — a macOS→Linux
+// cross-compile (e.g. the static Linux SDK) also runs the manifest on macOS,
+// takes the `nil` path, and would try to compile the not-yet-ported files for
+// Linux. Build the Linux target natively (the container CI) until the port lands.
 #if os(Linux)
 let pictKitSources: [String]? = [
     "Store/IconEntry.swift",
