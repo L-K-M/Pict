@@ -1,5 +1,9 @@
 #if canImport(AppKit)
 import AppKit
+#endif
+// CoreGraphics under its own gate so it always matches the `PipelineImage` seam below
+// (which keys on `canImport(CoreGraphics)`), rather than riding on the AppKit gate.
+#if canImport(CoreGraphics)
 import CoreGraphics
 #else
 import Foundation

@@ -47,6 +47,10 @@ public enum PictURL {
     /// everywhere…" only when it will work, and point at where to get Pict
     /// otherwise. Launch Services answers from its registration database, so asking
     /// costs nothing and starts nothing.
+    ///
+    /// **On Linux the result is an installed-or-not check, not an app location:** it is
+    /// the handler's `.desktop` file when locatable, else a bare `pict://` marker. Treat
+    /// a non-nil return as presence, not a path to open or reveal.
     public static func installedAppURL() -> URL? {
         #if canImport(AppKit)
         guard let probe else { return nil }
@@ -72,6 +76,11 @@ public enum PictURL {
         #if canImport(AppKit)
         return NSWorkspace.shared.open(url)
         #else
+        // `xdg-open` spawns happily even when no handler is registered for the scheme
+        // (it then exits non-zero), so its launch can't stand in for "opened" the way
+        // NSWorkspace.open does. Gate on a registered handler first, so the Bool keeps
+        // its contract and a caller can route to the install fallback when it's false.
+        guard installedAppURL() != nil else { return false }
         return launch("xdg-open", [url.absoluteString])
         #endif
     }
@@ -84,8 +93,13 @@ public enum PictURL {
     private static func desktopEntryURL(named handler: String) -> URL? {
         let leaf = (handler as NSString).lastPathComponent
         guard !leaf.isEmpty else { return nil }
-        var roots = [FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".local/share/applications", isDirectory: true)]
+        // The user applications dir is `$XDG_DATA_HOME/applications`, defaulting to
+        // ~/.local/share/applications; then the system `$XDG_DATA_DIRS`.
+        let dataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"]
+            ?? FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".local/share", isDirectory: true).path
+        var roots = [URL(fileURLWithPath: dataHome, isDirectory: true)
+            .appendingPathComponent("applications", isDirectory: true)]
         let dataDirs = ProcessInfo.processInfo.environment["XDG_DATA_DIRS"] ?? "/usr/local/share:/usr/share"
         for dir in dataDirs.split(separator: ":") where !dir.isEmpty {
             roots.append(URL(fileURLWithPath: String(dir), isDirectory: true)
