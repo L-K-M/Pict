@@ -45,11 +45,11 @@ final class PixelImageTests: XCTestCase {
     /// conversion is caught.
     private static func topHalfOpaqueImage(side: Int = 16) -> CGImage? {
         guard let context = IconBitmap.makeContext(width: side, height: side) else { return nil }
-        let full = CGRect(x: 0, y: 0, width: side, height: side)
-        context.clear(full)
+        let edge = CGFloat(side)
+        context.clear(CGRect(x: 0, y: 0, width: edge, height: edge))
         context.setFillColor(red: 0, green: 0, blue: 0, alpha: 1)
         // A bitmap context is bottom-up, so the image's TOP half is the high-y half.
-        context.fill(CGRect(x: 0, y: side / 2, width: side, height: side - side / 2))
+        context.fill(CGRect(x: 0, y: edge / 2, width: edge, height: edge - edge / 2))
         return context.makeImage()
     }
 
@@ -83,8 +83,12 @@ final class PixelImageTests: XCTestCase {
     func testClassificationAgreesAcrossTheSeam() throws {
         let square = IconTestSupport.makeImage(width: 128, height: 128, filled: true)
         let ellipse = IconTestSupport.makeImage(width: 128, height: 128, filled: false)
+        // A vertically asymmetric shape too, for good measure — the flip itself is
+        // pinned by testInitFromCGImageKeepsRowZeroAtTheTop (classification is
+        // orientation-invariant), but this checks another shape class across the seam.
+        let asymmetric = try XCTUnwrap(Self.topHalfOpaqueImage(side: 128))
 
-        for image in [square, ellipse] {
+        for image in [square, ellipse, asymmetric] {
             let pixel = try XCTUnwrap(PixelImage(cgImage: image))
             XCTAssertEqual(IconShapeClassifier.classify(image),
                            IconShapeClassifier.classify(pixel),
