@@ -63,6 +63,15 @@ final class KeyArgumentTests: XCTestCase {
         XCTAssertEqual(KeyArgument.key(from: "widget:/x"), .failure(.unrecognized("widget:/x")))
     }
 
+    func testKnownKindWithEmptyValueIsRejected() {
+        // A known kind with an empty value (`app:`) must not slip through as a zero-length
+        // path/URL. IconEntryKey(serialized:) rejects the empty value, and `app:` isn't a
+        // .desktop path, so it lands as unrecognized rather than a bogus empty key.
+        XCTAssertEqual(KeyArgument.key(from: "app:"), .failure(.unrecognized("app:")))
+        XCTAssertEqual(KeyArgument.key(from: "file:"), .failure(.unrecognized("file:")))
+        XCTAssertEqual(KeyArgument.key(from: "url:"), .failure(.unrecognized("url:")))
+    }
+
     func testSchemePrefixedDesktopStringsAreNotAppPaths() {
         // Anything with a URI scheme at the start ending in `.desktop` is a link, not a
         // desktop-entry path, and must not be coerced into a bogus `app:` key — including

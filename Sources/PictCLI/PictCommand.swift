@@ -141,13 +141,17 @@ struct SetCommand: ParsableCommand {
 
     func run() throws {
         let entryKey = try resolveKey(key)
-        let url = URL(fileURLWithPath: imageFile)
+        // Expand a leading `~` like `--store` and the key paths do, so the three path
+        // inputs handle a quoted/scripted tilde consistently.
+        let url = URL(fileURLWithPath: (imageFile as NSString).expandingTildeInPath)
         var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
-              !isDirectory.boolValue else {
-            // Reject a directory here rather than let it fall into decode and die with a
-            // misleading "couldn't decode as PNG" — a common tab-completion mistake.
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
             throw RuntimeError("No such image file: \(imageFile)")
+        }
+        // Reject a directory with its own message rather than let it fall into decode and
+        // die with a misleading "couldn't decode as PNG" — a common tab-completion mistake.
+        guard !isDirectory.boolValue else {
+            throw RuntimeError("'\(imageFile)' is a directory, not an image file.")
         }
 
         let store = options.makeStore()

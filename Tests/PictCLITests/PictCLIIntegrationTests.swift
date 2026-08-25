@@ -147,6 +147,11 @@ final class PictCLIIntegrationTests: XCTestCase {
             let result = try runPict("set", "--store", storeDirectory.path, key, png.path)
             XCTAssertEqual(result.status, 0,
                            "hostile key \(key) should be sanitized and stored, not rejected: \(result.stderr)")
+            // The other half of the invariant: the same spelling must read the entry back,
+            // or `set` wrote an orphan `get`/`remove` could never reach.
+            let fetched = try runPict("get", "--store", storeDirectory.path, key)
+            XCTAssertEqual(fetched.status, 0,
+                           "hostile key \(key) was stored but is not retrievable: \(fetched.stderr)")
         }
         // The store root holds only entries/ and its README — nothing traversed out.
         let root = try FileManager.default.contentsOfDirectory(atPath: storeDirectory.path).sorted()

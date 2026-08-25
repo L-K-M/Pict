@@ -85,6 +85,12 @@ extension IconEntryKey {
             // a fragment stays a fragment instead of folding into the path as `%23`.
             if let url = URL(string: value) { return .link(url) }
             var allowed = CharacterSet.urlFragmentAllowed
+            // Keep `#` so a fragment stays a fragment rather than folding into the path as
+            // `%23`. (Adding `%` to also preserve an escape the value already carries does
+            // NOT work on swift-corelibs-foundation — addingPercentEncoding re-encodes `%`
+            // to `%25` regardless — so a value with both a raw space and a pre-existing
+            // escape is left as a known limitation; a faithful repair needs a real URL
+            // parser, which is out of scope for this key seam.)
             allowed.insert(charactersIn: "#")
             let repaired = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
             return .link(URL(string: repaired) ?? URL(fileURLWithPath: value))
