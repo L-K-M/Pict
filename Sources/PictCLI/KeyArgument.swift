@@ -69,20 +69,25 @@ extension IconEntryKey {
     var asTarget: IconTarget {
         switch kind {
         case .app:
-            return .application(bundleURL: URL(fileURLWithPath: value), bundleIdentifier: nil)
+            // Expand a leading `~` (a quoted/scripted `~/…` the shell left intact) — a
+            // no-op for the absolute paths `list` prints, so round-trip idempotence holds.
+            return .application(bundleURL: URL(fileURLWithPath: (value as NSString).expandingTildeInPath),
+                                bundleIdentifier: nil)
         case .bundleID:
             return .application(bundleURL: nil, bundleIdentifier: value)
         case .file:
-            return .file(URL(fileURLWithPath: value))
+            return .file(URL(fileURLWithPath: (value as NSString).expandingTildeInPath))
         case .url:
-            // A stored link key is a normalized absolute URL string. Prefer the value as
-            // given; percent-encode one that won't parse (e.g. a raw space) so it still
-            // becomes a real link key matching the normalized form apps store, rather than
-            // falling through to a bogus `file:` URL. The file-URL fallback keeps `asTarget`
-            // total for a pathological value that resists even that.
-            return .link(URL(string: value)
-                ?? URL(string: value.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? value)
-                ?? URL(fileURLWithPath: value))
+            // A stored link key is a normalized URL string. Prefer the value as given, so a
+            // value that already carries valid percent-escapes is never double-encoded;
+            // percent-encode one that won't parse (e.g. a raw space) so it still becomes a
+            // real link key rather than a bogus `file:` URL. Keep `#` in the allowed set so
+            // a fragment stays a fragment instead of folding into the path as `%23`.
+            if let url = URL(string: value) { return .link(url) }
+            var allowed = CharacterSet.urlFragmentAllowed
+            allowed.insert(charactersIn: "#")
+            let repaired = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+            return .link(URL(string: repaired) ?? URL(fileURLWithPath: value))
         }
     }
 }

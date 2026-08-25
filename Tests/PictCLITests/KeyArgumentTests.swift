@@ -1,4 +1,5 @@
 import XCTest
+import Foundation
 import PictKit
 @testable import pict_cli
 
@@ -106,13 +107,30 @@ final class KeyArgumentTests: XCTestCase {
         XCTAssertEqual(IconEntryKey.storageKey(for: original.asTarget), original)
     }
 
-    func testURLWithASpaceStaysALinkKeyNotAFileKey() throws {
-        // An unparseable-as-given url: value (a raw space) is percent-encoded into a real
-        // link key rather than degrading to a bogus file: URL that nothing would match.
-        let key = try resolveKey("url:https://example.com/a b.png")
-        XCTAssertEqual(key.kind, .url)
-        XCTAssertFalse(key.value.hasPrefix("file:"), "must not degrade to a file URL: \(key.value)")
-        XCTAssertTrue(key.value.contains("example.com"), key.value)
+    func testURLRepairKeepsALinkKeyAndPreservesFragments() throws {
+        // An unparseable-as-given url: value (a raw space) becomes a real link key, not a
+        // bogus file: URL that nothing would match.
+        let spaced = try resolveKey("url:https://example.com/a b.png")
+        XCTAssertEqual(spaced.kind, .url)
+        XCTAssertFalse(spaced.value.hasPrefix("file:"), "must not degrade to a file URL: \(spaced.value)")
+        XCTAssertTrue(spaced.value.contains("example.com"), spaced.value)
+
+        // A fragment on a space-bearing URL stays a fragment (`#sec`) rather than being
+        // folded into the path as `%23`.
+        let fragment = try resolveKey("url:https://example.com/my page#sec")
+        XCTAssertEqual(fragment.kind, .url)
+        XCTAssertTrue(fragment.value.contains("#sec"), "fragment lost: \(fragment.value)")
+        XCTAssertFalse(fragment.value.contains("%23"), "fragment delimiter was encoded: \(fragment.value)")
+    }
+
+    func testLeadingTildeInPathKeysIsExpanded() throws {
+        // A quoted `~/…` the shell left intact expands to the home directory, so the key
+        // matches the app's real absolute path, not a cwd-relative `~` path.
+        let home = NSHomeDirectory()
+        XCTAssertEqual(try resolveKey("~/Applications/Foo.desktop"),   // bare .desktop → app: kind
+                       IconEntryKey(kind: .app, value: "\(home)/Applications/Foo.desktop"))
+        XCTAssertEqual(try resolveKey("file:~/notes.txt"),
+                       IconEntryKey(kind: .file, value: "\(home)/notes.txt"))
     }
 
     func testResolvedKeysAreCanonical() throws {

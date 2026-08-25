@@ -157,6 +157,15 @@ final class PictCLIIntegrationTests: XCTestCase {
         XCTAssertFalse(inside.contains { $0.contains("/") || $0.contains("..") }, "\(inside)")
     }
 
+    func testStoreTildeIsExpanded() throws {
+        // A quoted `--store ~/…` (the shell leaves the `~`) resolves against the home
+        // directory. `path` only prints — it writes nothing into home — so this is safe.
+        let result = try runPict("path", "--store", "~/pict-cli-tilde-\(UUID().uuidString)")
+        XCTAssertEqual(result.status, 0, result.stderr)
+        XCTAssertTrue(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                        .hasPrefix(NSHomeDirectory()), result.stdout)
+    }
+
     // MARK: The shared location honors XDG_DATA_HOME on Linux
 
     #if os(Linux)
@@ -203,11 +212,29 @@ final class PictCLIIntegrationTests: XCTestCase {
         drain(err.fileHandleForReading, into: errBox, group: drained)
 
         if drained.wait(timeout: .now() + 30) == .timedOut {
-            process.terminate()                    // SIGTERM; pict installs no handler, so it exits
-            _ = drained.wait(timeout: .now() + 5)  // bounded, so cleanup can't hang either
-            XCTFail("pict \(arguments) did not exit within 30 s")
+            process.terminate()                        // SIGTERM; pict installs no handler, so it exits
+            if drained.wait(timeout: .now() + 5) == .timedOut {
+                // The drains are still running: reading the boxes now would race them (the
+                // group never established a happens-before edge). Bail with a sentinel and
+                // leave the boxes untouched rather than risk UB.
+                XCTFail("pict \(arguments) did not exit within 30 s")
+                return Output(stdout: "", stderr: "pict \(arguments) timed out", status: -1)
+            }
         }
-        process.waitUntilExit()
+        // Both pipes reaching EOF doesn't prove the child exited (it can close its fds and
+        // linger), so bound the exit wait too instead of trusting waitUntilExit() to return.
+        // The boxes are safe to read from here on — the drain group has completed above, so
+        // the happens-before edge exists — but `terminationStatus` traps until the process
+        // has actually exited, so the timeout path returns a sentinel status instead.
+        let exited = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async { process.waitUntilExit(); exited.signal() }
+        if exited.wait(timeout: .now() + 30) == .timedOut {
+            process.terminate()
+            XCTFail("pict \(arguments) did not exit within 30 s")
+            return Output(stdout: String(data: outBox.data, encoding: .utf8) ?? "",
+                          stderr: String(data: errBox.data, encoding: .utf8) ?? "",
+                          status: -1)
+        }
         return Output(stdout: String(data: outBox.data, encoding: .utf8) ?? "",
                       stderr: String(data: errBox.data, encoding: .utf8) ?? "",
                       status: process.terminationStatus)

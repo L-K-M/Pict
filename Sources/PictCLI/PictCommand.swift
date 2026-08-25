@@ -31,7 +31,9 @@ struct StoreOptions: ParsableArguments {
     /// The resolved store directory, without loading it.
     var directory: URL {
         if let store {
-            return URL(fileURLWithPath: store, isDirectory: true)
+            // Expand a leading `~` (a quoted `--store ~/AltStore` the shell left intact),
+            // so a scripted secondary-profile path targets the real home directory.
+            return URL(fileURLWithPath: (store as NSString).expandingTildeInPath, isDirectory: true)
         }
         return IconStoreLocation.defaultDirectory()
     }
