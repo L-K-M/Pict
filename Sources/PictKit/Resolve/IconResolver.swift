@@ -1,5 +1,48 @@
+#if canImport(AppKit)
 import AppKit
+#endif
+// Foundation is imported unconditionally: this file uses it on every platform (NSLock,
+// DispatchQueue, NSSize/CGFloat). CoreGraphics sits under its own `canImport` gate
+// because CGImage is only referenced on the AppKit path. Foundation is deliberately NOT
+// tucked into an `#else` of that gate — that would tie whether Foundation is in scope to
+// CoreGraphics's availability, so the Linux build would lean on the toolchain
+// re-exporting Foundation instead of importing it outright. Matches IconResolverTests.
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
+import Foundation
+
+#if canImport(AppKit)
+/// The resolved artwork type — an `NSImage` on macOS, ready to draw.
+public typealias ResolvedIconImage = NSImage
+#else
+/// The resolved artwork type on Linux: the premultiplied pixels plus the point size
+/// they should draw at (pixels ÷ scale). The frontend turns this into whatever its
+/// toolkit draws; the resolver stays toolkit-agnostic.
+public struct ResolvedIconImage: Sendable, Equatable {
+    public let pixels: PixelImage
+    public let pointSize: Double
+    public init(pixels: PixelImage, pointSize: Double) {
+        self.pixels = pixels
+        self.pointSize = pointSize
+    }
+}
+#endif
+
+/// The image type the resolution pipeline works in: Core Graphics on macOS (the
+/// shipping path, untouched), the pure raster `PixelImage` on Linux. Every pipeline
+/// step — `store.image(for:)`, the bundle read, classify/mask/normalize — has an
+/// overload for each, so `resolve()` is written once against this alias.
+///
+/// Gated on `canImport(AppKit)` to match `ResolvedIconImage` and `resolve()`'s final
+/// construction — this package assumes CoreGraphics and AppKit travel together (true
+/// on its macOS and Linux targets); a CoreGraphics-without-AppKit target would need
+/// these three gates reconciled first.
+#if canImport(AppKit)
+private typealias PipelineImage = CGImage
+#else
+private typealias PipelineImage = PixelImage
+#endif
 
 /// Resolves a target to the artwork to draw for it.
 ///
@@ -47,7 +90,7 @@ public final class IconResolver {
     /// and there's nothing" from "we haven't looked yet".
     private enum Resolution {
         case useSystemIcon
-        case image(NSImage)
+        case image(ResolvedIconImage)
     }
 
     private var cache: [IconTarget: Resolution] = [:]
@@ -72,7 +115,7 @@ public final class IconResolver {
 
     /// The artwork to draw for `target`, or `nil` to fall back to the system icon.
     /// A dictionary lookup; a miss schedules the work and returns `nil`.
-    public func icon(for target: IconTarget) -> NSImage? {
+    public func icon(for target: IconTarget) -> ResolvedIconImage? {
         lock.lock()
         known.insert(target)
         let cached = cache[target]
@@ -211,19 +254,15 @@ public final class IconResolver {
         // A pin opts this target out entirely.
         guard !store.isPinnedToSystemIcon(target) else { return .useSystemIcon }
 
-        var artwork: CGImage?
+        var artwork: PipelineImage?
         var isCustom = false
 
         if options.mode.usesCustomIcons, let custom = store.image(for: target) {
             artwork = custom
             isCustom = true
         }
-        if artwork == nil, case .application(_, let bundleIdentifier) = target,
-           let bundleIdentifier {
-            // Still by identifier: recovering an app's *own* artwork is a question
-            // about the bundle, and a wrapper that borrowed an identifier borrowed the
-            // artwork behind it too. Only the user's override is per-target here.
-            artwork = BundleArtwork.image(forBundleID: bundleIdentifier)
+        if artwork == nil {
+            artwork = bundleArtwork(for: target)
         }
         guard var image = artwork else { return .useSystemIcon }
 
@@ -247,8 +286,35 @@ public final class IconResolver {
                                              bleed: options.bleed,
                                              trim: options.trimsTransparentEdges,
                                              shadow: options.drawsShadow)
+        #if canImport(AppKit)
         let points = NSSize(width: CGFloat(sized.width) / options.scale,
                             height: CGFloat(sized.height) / options.scale)
         return .image(NSImage(cgImage: sized, size: points))
+        #else
+        // Square by construction: `normalize` renders into a `canvasSide × canvasSide`
+        // canvas, so one point size suffices. Assert it, so a future change that breaks
+        // the invariant is caught in debug rather than drawing a distorted aspect ratio.
+        assert(sized.width == sized.height, "ResolvedIconImage.pointSize assumes a square canvas")
+        // Derive from the shorter side so a future non-square regression degrades
+        // gracefully in release (never an inflated dimension) rather than distorting.
+        let side = Double(min(sized.width, sized.height))
+        return .image(ResolvedIconImage(pixels: sized, pointSize: side / Double(options.scale)))
+        #endif
+    }
+
+    /// The app's own bundle artwork for `target`, or `nil`. macOS reads the bundle as a
+    /// `CGImage`, so the hot-path pipeline stays Core Graphics; a wrapper that borrowed
+    /// an identifier borrowed the artwork behind it, so this stays keyed by identifier.
+    /// Linux has no bundle equivalent — icon-theme lookup lands in LP-24 — so it misses.
+    ///
+    /// Mirrors `BundleArtworkProvider` (Resolve/ArtworkProviding.swift), which feeds the
+    /// status path; keep the two identifier-keyed reads in sync (LP-24 must update both).
+    private func bundleArtwork(for target: IconTarget) -> PipelineImage? {
+        #if canImport(AppKit)
+        guard case .application(_, let bundleIdentifier) = target, let bundleIdentifier else { return nil }
+        return BundleArtwork.image(forBundleID: bundleIdentifier)
+        #else
+        return nil
+        #endif
     }
 }

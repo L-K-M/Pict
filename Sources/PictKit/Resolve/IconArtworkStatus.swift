@@ -52,8 +52,11 @@ public struct IconArtworkStatus: Equatable {
     private static let queue = DispatchQueue(label: "com.pict.icon-status", qos: .utility)
 
     /// Describes one target. Decodes its bundle artwork, so it blocks — call it off
-    /// the main thread.
-    public static func describe(_ target: IconTarget, store: IconStore) -> IconArtworkStatus {
+    /// the main thread. The artwork source is behind `ArtworkProviding` so the bundle
+    /// read stays macOS-only (its Linux placeholder reports no original artwork until
+    /// icon-theme lookup arrives in LP-24).
+    public static func describe(_ target: IconTarget, store: IconStore,
+                                artwork: ArtworkProviding = BundleArtworkProvider()) -> IconArtworkStatus {
         if let entry = store.entry(for: target) {
             if entry.origin == .system {
                 return IconArtworkStatus(shape: nil, hasCustomIcon: false,
@@ -66,25 +69,22 @@ public struct IconArtworkStatus: Equatable {
             }
         }
         // By identifier: this rung is about the bundle's *own* artwork, and a wrapper
-        // that borrowed an identifier shows what is behind it.
-        guard case .application(_, let bundleIdentifier) = target, let bundleIdentifier else {
-            return IconArtworkStatus(shape: nil, hasCustomIcon: false,
-                                     isPinnedToSystemIcon: false)
-        }
-        let shape = BundleArtwork.image(forBundleID: bundleIdentifier)
-            .map { IconShapeClassifier.classify($0) }
+        // that borrowed an identifier shows what is behind it. The provider itself
+        // applies the identifier check; a non-application target yields nothing.
+        let shape = artwork.artwork(for: target).map { IconShapeClassifier.classify($0) }
         return IconArtworkStatus(shape: shape, hasCustomIcon: false, isPinnedToSystemIcon: false)
     }
 
     /// Describes several targets off the main thread, calling `completion` back on
     /// it. Keyed by the serialised storage key, which is what rows are identified by.
     public static func load(for targets: [IconTarget], store: IconStore,
+                     artwork: ArtworkProviding = BundleArtworkProvider(),
                      completion: @escaping ([String: IconArtworkStatus]) -> Void) {
         queue.async {
             var result: [String: IconArtworkStatus] = [:]
             for target in targets {
                 guard let key = IconEntryKey.storageKey(for: target) else { continue }
-                result[key.serialized] = describe(target, store: store)
+                result[key.serialized] = describe(target, store: store, artwork: artwork)
             }
             DispatchQueue.main.async { completion(result) }
         }

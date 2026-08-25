@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import CoreGraphics
 import Foundation
@@ -182,3 +183,4 @@ public enum BundleArtwork {
         return image.cgImage(forProposedRect: &proposed, context: nil, hints: nil)
     }
 }
+#endif
