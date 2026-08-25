@@ -75,9 +75,14 @@ extension IconEntryKey {
         case .file:
             return .file(URL(fileURLWithPath: value))
         case .url:
-            // A stored link key is a normalized absolute URL string; fall back to a file
-            // URL only if it somehow won't parse, so `asTarget` is always total.
-            return .link(URL(string: value) ?? URL(fileURLWithPath: value))
+            // A stored link key is a normalized absolute URL string. Prefer the value as
+            // given; percent-encode one that won't parse (e.g. a raw space) so it still
+            // becomes a real link key matching the normalized form apps store, rather than
+            // falling through to a bogus `file:` URL. The file-URL fallback keeps `asTarget`
+            // total for a pathological value that resists even that.
+            return .link(URL(string: value)
+                ?? URL(string: value.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? value)
+                ?? URL(fileURLWithPath: value))
         }
     }
 }

@@ -106,6 +106,15 @@ final class KeyArgumentTests: XCTestCase {
         XCTAssertEqual(IconEntryKey.storageKey(for: original.asTarget), original)
     }
 
+    func testURLWithASpaceStaysALinkKeyNotAFileKey() throws {
+        // An unparseable-as-given url: value (a raw space) is percent-encoded into a real
+        // link key rather than degrading to a bogus file: URL that nothing would match.
+        let key = try resolveKey("url:https://example.com/a b.png")
+        XCTAssertEqual(key.kind, .url)
+        XCTAssertFalse(key.value.hasPrefix("file:"), "must not degrade to a file URL: \(key.value)")
+        XCTAssertTrue(key.value.contains("example.com"), key.value)
+    }
+
     func testResolvedKeysAreCanonical() throws {
         // Whatever the user types, `resolveKey` must land on the same key `IconStore`
         // derives — so `set`, `get` and `remove` always agree. This is the invariant that

@@ -97,7 +97,7 @@ struct Get: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Show the store entry for a key.")
 
     @OptionGroup var options: StoreOptions
-    @Argument(help: "app:…, bundleID:…, file:…, url:…, or a .desktop path.") var key: String
+    @Argument(help: "app:…, bundleID:…, file:…, url:…, or a .desktop path (relative paths resolve against the current directory).") var key: String
 
     func run() throws {
         let entryKey = try resolveKey(key)
@@ -134,13 +134,17 @@ struct SetCommand: ParsableCommand {
     )
 
     @OptionGroup var options: StoreOptions
-    @Argument(help: "app:…, bundleID:…, file:…, url:…, or a .desktop path.") var key: String
+    @Argument(help: "app:…, bundleID:…, file:…, url:…, or a .desktop path (relative paths resolve against the current directory).") var key: String
     @Argument(help: "Path to the source image.") var imageFile: String
 
     func run() throws {
         let entryKey = try resolveKey(key)
         let url = URL(fileURLWithPath: imageFile)
-        guard FileManager.default.fileExists(atPath: url.path) else {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              !isDirectory.boolValue else {
+            // Reject a directory here rather than let it fall into decode and die with a
+            // misleading "couldn't decode as PNG" — a common tab-completion mistake.
             throw RuntimeError("No such image file: \(imageFile)")
         }
 
@@ -202,7 +206,7 @@ struct Remove: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Remove the icon override for a key.")
 
     @OptionGroup var options: StoreOptions
-    @Argument(help: "app:…, bundleID:…, file:…, url:…, or a .desktop path.") var key: String
+    @Argument(help: "app:…, bundleID:…, file:…, url:…, or a .desktop path (relative paths resolve against the current directory).") var key: String
 
     func run() throws {
         let entryKey = try resolveKey(key)
