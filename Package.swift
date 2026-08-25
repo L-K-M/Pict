@@ -22,7 +22,10 @@ let package = Package(
     name: "PictKit",
     platforms: [.macOS(.v13)],
     products: [
-        .library(name: "PictKit", targets: ["PictKit"])
+        .library(name: "PictKit", targets: ["PictKit"]),
+        // The `pict` command-line tool (LP-14): store operations from a terminal, on
+        // Linux and macOS alike. The product is named `pict`; the target is `pict-cli`.
+        .executable(name: "pict", targets: ["pict-cli"]),
     ],
     dependencies: [
         // The Linux PNG codec (LP-04). Pure Swift, no zlib/C deps. SwiftPM resolves the
@@ -31,6 +34,9 @@ let package = Package(
         // to Linux, so the Xcode build never compiles it and macOS keeps decoding/encoding
         // through ImageIO in IconImageValidator.
         .package(url: "https://github.com/tayloraswift/swift-png.git", from: "4.5.0"),
+        // The `pict` CLI's argument parsing (LP-14). Only the `pict-cli` target links it;
+        // PictKit and the Xcode App build never touch it.
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
     ],
     targets: [
         .target(
@@ -48,7 +54,25 @@ let package = Package(
         // the IN_* masks are hard-coded Swift-side and the event struct is parsed by
         // hand (see docs/linux-port §Part 10).
         .systemLibrary(name: "CInotify", path: "Sources/CInotify"),
+        // The `pict` CLI (LP-14). A thin front end over PictKit's IconStore: it owns its
+        // own image decode (ingestion lives in the consumer, not in IconStore — see
+        // `IconStore.setIcon`) and writes through the exact store path the apps use.
+        .executableTarget(
+            name: "pict-cli",
+            dependencies: [
+                "PictKit",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "Sources/PictCLI"
+        ),
         .testTarget(name: "PictKitTests", dependencies: ["PictKit"],
-                    sources: pictKitTestsSources)
+                    sources: pictKitTestsSources),
+        // Unit tests for the CLI's argument→action mapping plus an integration test that
+        // drives the built `pict` binary against a temp store (LP-14 acceptance).
+        .testTarget(
+            name: "PictCLITests",
+            dependencies: ["pict-cli", "PictKit"],
+            resources: [.copy("Fixtures/sample-icon.png")]
+        ),
     ]
 )
