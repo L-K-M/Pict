@@ -62,6 +62,13 @@ final class KeyArgumentTests: XCTestCase {
         XCTAssertEqual(KeyArgument.key(from: "widget:/x"), .failure(.unrecognized("widget:/x")))
     }
 
+    func testURLEndingInDesktopIsNotAnAppPath() {
+        // A link that merely ends in `.desktop` is not a desktop-entry path; it must not
+        // be coerced into a bogus `app:` key. A real link goes under an explicit `url:`.
+        XCTAssertEqual(KeyArgument.key(from: "https://example.com/apps/firefox.desktop"),
+                       .failure(.unrecognized("https://example.com/apps/firefox.desktop")))
+    }
+
     func testLeadingAndTrailingWhitespaceIsTrimmed() {
         XCTAssertEqual(try key("  app:/A/B.app \n"), IconEntryKey(kind: .app, value: "/A/B.app"))
     }
@@ -85,6 +92,21 @@ final class KeyArgumentTests: XCTestCase {
         // `remove` will look for it.
         let original = IconEntryKey(kind: .app, value: "/Applications/Safari.app")
         XCTAssertEqual(IconEntryKey.storageKey(for: original.asTarget), original)
+    }
+
+    func testResolvedKeysAreCanonical() throws {
+        // Whatever the user types, `resolveKey` must land on the same key `IconStore`
+        // derives — so `set`, `get` and `remove` always agree. This is the invariant that
+        // keeps a relative `.desktop` path (or any non-canonical path/URL) reachable after
+        // `set` standardizes it. `storageKey(for: key.asTarget) == key` is exactly that
+        // fixed point.
+        for argument in ["/usr/share/applications/firefox.desktop", "firefox.desktop",
+                         "file:/tmp/x/../x", "url:https://example.com", "app:/A/B.app",
+                         "bundleID:com.foo"] {
+            let key = try resolveKey(argument)
+            XCTAssertEqual(IconEntryKey.storageKey(for: key.asTarget), key,
+                           "resolveKey(\(argument)) is not a storageKey fixed point")
+        }
     }
 
     // MARK: Helper

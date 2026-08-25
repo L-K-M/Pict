@@ -39,6 +39,13 @@ final class PictCLIIntegrationTests: XCTestCase {
         XCTAssertEqual(names.filter { $0.hasSuffix(".json") }.count, 1)
         XCTAssertEqual(names.filter { $0.hasSuffix(".png") }.count, 1)
 
+        // set again for the same key — overwriting must replace, not orphan, the stored
+        // PNG (the file stem is derived from the key, so the second write lands on it).
+        XCTAssertEqual(try run("set", "--store", storeDirectory.path, appKey, fixture.path).status, 0)
+        let afterOverwrite = try FileManager.default.contentsOfDirectory(atPath: entries.path)
+        XCTAssertEqual(afterOverwrite.filter { $0.hasSuffix(".json") }.count, 1)
+        XCTAssertEqual(afterOverwrite.filter { $0.hasSuffix(".png") }.count, 1)
+
         // list — now shows the entry: <key> TAB <origin> TAB <image>.
         let list = try run("list", "--store", storeDirectory.path)
         let columns = list.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -116,13 +123,18 @@ final class PictCLIIntegrationTests: XCTestCase {
         process.standardOutput = out
         process.standardError = err
         try process.run()
-        process.waitUntilExit()
+        // Drain the pipes before waiting: if the child ever fills the OS pipe buffer
+        // (~64 KB) it blocks on write, and a parent parked in waitUntilExit() that hasn't
+        // read yet would deadlock. readDataToEndOfFile returns once the child closes the
+        // pipe (i.e. exits), so the wait after it is immediate.
         let stdout = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         let stderr = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        process.waitUntilExit()
         return Output(stdout: stdout, stderr: stderr, status: process.terminationStatus)
     }
 
-    /// The temp copy of the checked-in fixture PNG (`Bundle.module` resource).
+    /// The checked-in fixture PNG, bundled as a `Bundle.module` test resource (returned
+    /// directly — not a per-test copy, so tests must not mutate it).
     private func fixturePNG() throws -> URL {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "sample-icon", withExtension: "png"),
                                "sample-icon.png resource is missing")

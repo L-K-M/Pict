@@ -43,7 +43,10 @@ enum KeyArgument {
         if let key = IconEntryKey(serialized: trimmed) { return .success(key) }
 
         // A bare `.desktop` path has no `kind:` prefix; it is the app's Linux location.
-        if trimmed.lowercased().hasSuffix(".desktop") {
+        // Exclude anything carrying a scheme (`://`): a URL that merely ends in `.desktop`
+        // is not a desktop-entry path and would make a bogus `app:` key no app can match —
+        // a link belongs under an explicit `url:` key instead.
+        if trimmed.lowercased().hasSuffix(".desktop"), !trimmed.contains("://") {
             return .success(IconEntryKey(kind: .app, value: trimmed))
         }
 

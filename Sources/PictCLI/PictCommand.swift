@@ -51,11 +51,23 @@ struct RuntimeError: Error, CustomStringConvertible, LocalizedError {
     var errorDescription: String? { message }
 }
 
-/// Resolves a key argument or throws a usage error naming the accepted forms.
+/// Resolves a key argument to the store's own canonical key, or throws a usage error
+/// naming the accepted forms.
+///
+/// Canonicalizing here — not just in `set` — is what keeps `set`, `get` and `remove`
+/// agreeing. `IconStore.setIcon` derives its storage key via `storageKey(for:)`, which
+/// standardizes paths (a relative `.desktop` path like `firefox.desktop` becomes
+/// cwd-absolute) and normalizes URL strings. If `get`/`remove` looked up the typed key
+/// verbatim, a `set firefox.desktop` would land under `app:/cwd/firefox.desktop` while
+/// `get firefox.desktop` looked for `app:firefox.desktop` and found nothing. Resolving
+/// through `storageKey(for: key.asTarget)` makes every subcommand share that derivation;
+/// it is idempotent on the already-canonical keys `pict list` prints.
 func resolveKey(_ argument: String) throws -> IconEntryKey {
     switch KeyArgument.key(from: argument) {
-    case .success(let key): return key
-    case .failure(let failure): throw ValidationError(failure.description)
+    case .success(let key):
+        return IconEntryKey.storageKey(for: key.asTarget) ?? key
+    case .failure(let failure):
+        throw ValidationError(failure.description)
     }
 }
 
@@ -142,7 +154,9 @@ struct Set: ParsableCommand {
         }
         #else
         guard let image = LinuxImageDecoding.decodePNG(contentsOf: url) else {
-            throw RuntimeError(IconImageValidator.Rejection.unreadable.message)
+            // The Linux codec returns nil both for a corrupt/non-PNG file and for one
+            // whose dimensions exceed the store's limits, so name both possibilities.
+            throw RuntimeError("Couldn't decode '\(imageFile)' as a PNG, or it exceeds the store's size limits.")
         }
         // Apply the accept gate the macOS ImageIO decode runs for free (minimum size,
         // aspect ratio); the Linux codec only bounds the maximum.
