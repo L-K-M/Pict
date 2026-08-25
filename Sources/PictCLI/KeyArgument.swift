@@ -43,10 +43,13 @@ enum KeyArgument {
         if let key = IconEntryKey(serialized: trimmed) { return .success(key) }
 
         // A bare `.desktop` path has no `kind:` prefix; it is the app's Linux location.
-        // Exclude anything carrying a scheme (`://`): a URL that merely ends in `.desktop`
-        // is not a desktop-entry path and would make a bogus `app:` key no app can match —
-        // a link belongs under an explicit `url:` key instead.
-        if trimmed.lowercased().hasSuffix(".desktop"), !trimmed.contains("://") {
+        // Exclude anything with a URI scheme prefix (`scheme:` at the start) — `https://…`,
+        // the typo `https:/…`, `data:…` are links, not desktop-entry paths, and would make
+        // a bogus `app:` key no app can match; a link belongs under an explicit `url:` key.
+        // An anchored scheme check is exact where `contains("://")` both under- and
+        // over-matches (it misses `data:` and rejects a path with `://` mid-string).
+        if trimmed.lowercased().hasSuffix(".desktop"),
+           trimmed.range(of: #"^[A-Za-z][A-Za-z0-9+.\-]*:"#, options: .regularExpression) == nil {
             return .success(IconEntryKey(kind: .app, value: trimmed))
         }
 

@@ -15,7 +15,7 @@ struct PictCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "pict",
         abstract: "Read and write the shared Pict icon store.",
-        subcommands: [List.self, Get.self, Set.self, Remove.self, Path.self]
+        subcommands: [List.self, Get.self, SetCommand.self, Remove.self, PathCommand.self]
     )
 }
 
@@ -122,8 +122,11 @@ struct Get: ParsableCommand {
 
 // MARK: - set
 
-struct Set: ParsableCommand {
+struct SetCommand: ParsableCommand {
+    // Named `SetCommand`, not `Set`, so it doesn't shadow `Swift.Set` module-wide (the
+    // test target `@testable import`s this module). `commandName` keeps the CLI `pict set`.
     static let configuration = CommandConfiguration(
+        commandName: "set",
         abstract: "Set the icon for a key from an image file.",
         discussion: "The image is validated and re-encoded into the store as PNG. On "
             + "Linux the source must be a PNG; on macOS any raster format ImageIO reads "
@@ -152,7 +155,7 @@ struct Set: ParsableCommand {
         case .failure(let rejection):
             throw RuntimeError(rejection.message)
         }
-        #else
+        #elseif os(Linux)
         guard let image = LinuxImageDecoding.decodePNG(contentsOf: url) else {
             // The Linux codec returns nil both for a corrupt/non-PNG file and for one
             // whose dimensions exceed the store's limits, so name both possibilities.
@@ -165,6 +168,11 @@ struct Set: ParsableCommand {
             throw RuntimeError(rejection.message)
         }
         result = store.setIcon(image, for: target, writtenBy: "pict")
+        #else
+        // The two decode branches are aligned with their backends (CoreGraphics on macOS,
+        // LinuxImageDecoding on Linux) rather than assumed complements. A third platform
+        // needs its own decode path; fail loudly instead of a cryptic missing-symbol error.
+        #error("pict set has no image decode path for this platform")
         #endif
 
         switch result {
@@ -209,8 +217,10 @@ struct Remove: ParsableCommand {
 
 // MARK: - path
 
-struct Path: ParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Print the store directory.")
+struct PathCommand: ParsableCommand {
+    // Named `PathCommand`, not `Path`, to avoid shadowing Foundation's `Path`.
+    static let configuration = CommandConfiguration(commandName: "path",
+                                                    abstract: "Print the store directory.")
 
     @OptionGroup var options: StoreOptions
 

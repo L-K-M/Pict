@@ -62,11 +62,23 @@ final class KeyArgumentTests: XCTestCase {
         XCTAssertEqual(KeyArgument.key(from: "widget:/x"), .failure(.unrecognized("widget:/x")))
     }
 
-    func testURLEndingInDesktopIsNotAnAppPath() {
-        // A link that merely ends in `.desktop` is not a desktop-entry path; it must not
-        // be coerced into a bogus `app:` key. A real link goes under an explicit `url:`.
-        XCTAssertEqual(KeyArgument.key(from: "https://example.com/apps/firefox.desktop"),
-                       .failure(.unrecognized("https://example.com/apps/firefox.desktop")))
+    func testSchemePrefixedDesktopStringsAreNotAppPaths() {
+        // Anything with a URI scheme at the start ending in `.desktop` is a link, not a
+        // desktop-entry path, and must not be coerced into a bogus `app:` key — including
+        // spellings a plain `://` check misses (single slash, no slashes at all).
+        for argument in ["https://example.com/apps/firefox.desktop",
+                         "https:/example.com/x.desktop",
+                         "data:text/plain,x.desktop"] {
+            XCTAssertEqual(KeyArgument.key(from: argument), .failure(.unrecognized(argument)),
+                           "\(argument) should not be an app path")
+        }
+    }
+
+    func testPathWithAMidStringColonStaysAnAppPath() throws {
+        // A colon that isn't a scheme prefix (it's inside the path) leaves the `.desktop`
+        // path an app: key — the anchored scheme check only rejects `scheme:` at the start.
+        XCTAssertEqual(try key("/opt/a:b/x.desktop"),
+                       IconEntryKey(kind: .app, value: "/opt/a:b/x.desktop"))
     }
 
     func testLeadingAndTrailingWhitespaceIsTrimmed() {

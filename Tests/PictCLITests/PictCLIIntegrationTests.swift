@@ -1,4 +1,13 @@
 import XCTest
+import Foundation
+
+/// A `Sendable` holder so the concurrent stderr drain can publish its bytes without a
+/// mutable capture — which warns under the Swift 5 language mode and is an error under
+/// Swift 6. The `DispatchGroup` establishes the happens-before, so the unchecked
+/// conformance is sound here.
+private final class DataBox: @unchecked Sendable {
+    var data = Data()
+}
 
 /// Drives the built `pict` binary against a temp store — the LP-14 acceptance test.
 /// Everything the CLI does end to end (parse → store → filesystem) is exercised here.
@@ -26,8 +35,11 @@ final class PictCLIIntegrationTests: XCTestCase {
         XCTAssertEqual(path.status, 0, path.stderr)
         XCTAssertEqual(path.stdout.trimmingCharacters(in: .whitespacesAndNewlines), storeDirectory.path)
 
-        // list — empty to start.
-        XCTAssertEqual(try run("list", "--store", storeDirectory.path).stdout, "")
+        // list — empty to start (assert the clean exit too, not just empty stdout, so a
+        // failing list with empty output can't pass vacuously).
+        let emptyList = try run("list", "--store", storeDirectory.path)
+        XCTAssertEqual(emptyList.status, 0, emptyList.stderr)
+        XCTAssertEqual(emptyList.stdout, "")
 
         // set — writes an entry + a re-encoded PNG.
         let set = try run("set", "--store", storeDirectory.path, appKey, fixture.path)
@@ -48,18 +60,25 @@ final class PictCLIIntegrationTests: XCTestCase {
 
         // list — now shows the entry: <key> TAB <origin> TAB <image>.
         let list = try run("list", "--store", storeDirectory.path)
+        XCTAssertEqual(list.status, 0, list.stderr)
         let columns = list.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
             .split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
-        XCTAssertEqual(columns.first, appKey)
-        XCTAssertEqual(columns.count, 3)
+        // Guard before subscripting: a malformed line should fail cleanly, not crash the
+        // whole test runner out of bounds and swallow every later result.
+        guard columns.count == 3 else {
+            return XCTFail("expected 3 tab-separated columns, got \(columns) in \(list.stdout)")
+        }
+        XCTAssertEqual(columns[0], appKey)
         XCTAssertEqual(columns[1], "file")             // origin
         XCTAssertTrue(columns[2].hasSuffix(".png"))    // stored image name
 
         // get — reports the entry and the resolved image path.
         let get = try run("get", "--store", storeDirectory.path, appKey)
         XCTAssertEqual(get.status, 0, get.stderr)
-        XCTAssertTrue(get.stdout.contains("origin:   file"), get.stdout)
-        XCTAssertTrue(get.stdout.contains("path:     \(entries.path)"), get.stdout)
+        // Whitespace-tolerant so a cosmetic change to the aligned output isn't a failure.
+        XCTAssertNotNil(get.stdout.range(of: #"origin:\s+file"#, options: .regularExpression), get.stdout)
+        XCTAssertNotNil(get.stdout.range(of: "path:\\s+\(NSRegularExpression.escapedPattern(for: entries.path))",
+                                         options: .regularExpression), get.stdout)
 
         // remove — clears it.
         let remove = try run("remove", "--store", storeDirectory.path, appKey)
@@ -67,7 +86,9 @@ final class PictCLIIntegrationTests: XCTestCase {
         XCTAssertTrue(remove.stdout.contains("Removed"), remove.stdout)
 
         // list — empty again.
-        XCTAssertEqual(try run("list", "--store", storeDirectory.path).stdout, "")
+        let finalList = try run("list", "--store", storeDirectory.path)
+        XCTAssertEqual(finalList.status, 0, finalList.stderr)
+        XCTAssertEqual(finalList.stdout, "")
     }
 
     // MARK: Error paths (non-zero exit)
@@ -89,6 +110,28 @@ final class PictCLIIntegrationTests: XCTestCase {
                              "app:/Applications/Test.app", "/no/such/file.png")
         XCTAssertNotEqual(result.status, 0)
         XCTAssertTrue(result.stderr.contains("No such image file"), result.stderr)
+    }
+
+    // MARK: A hostile key can't escape the store
+
+    func testHostileKeysStaySandboxedInTheStore() throws {
+        // `set` routes every key through IconStore, whose IconEntryKey.fileStem sanitizes
+        // to a safe bare name and resolvedURL bounds it inside entries/. A traversal-shaped
+        // key is therefore stored *safely* under its sanitized stem, not rejected — so this
+        // pins the invariant that nothing a key can spell writes outside the store, rather
+        // than asserting a rejection the CLI deliberately doesn't do.
+        let png = try fixturePNG()
+        for key in ["app:../../pwned", "app:/tmp/pwned", "app:foo/../../bar",
+                    "file:/a/b/../../../c"] {
+            _ = try run("set", "--store", storeDirectory.path, key, png.path)
+        }
+        // The store root holds only entries/ and its README — nothing traversed out.
+        let root = try FileManager.default.contentsOfDirectory(atPath: storeDirectory.path).sorted()
+        XCTAssertEqual(root, ["README.txt", "entries"])
+        // And every file inside entries/ is a safe bare name; no separator survived.
+        let inside = try FileManager.default.contentsOfDirectory(
+            atPath: storeDirectory.appendingPathComponent("entries").path)
+        XCTAssertFalse(inside.contains { $0.contains("/") || $0.contains("..") }, "\(inside)")
     }
 
     // MARK: The shared location honors XDG_DATA_HOME on Linux
@@ -123,14 +166,28 @@ final class PictCLIIntegrationTests: XCTestCase {
         process.standardOutput = out
         process.standardError = err
         try process.run()
-        // Drain the pipes before waiting: if the child ever fills the OS pipe buffer
-        // (~64 KB) it blocks on write, and a parent parked in waitUntilExit() that hasn't
-        // read yet would deadlock. readDataToEndOfFile returns once the child closes the
-        // pipe (i.e. exits), so the wait after it is immediate.
-        let stdout = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let stderr = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+
+        // Drain both pipes concurrently, then wait. Reading stdout to EOF blocks until the
+        // child closes it, so a child blocked writing a full stderr pipe (>1 buffer) would
+        // deadlock a *sequential* read — draining stderr on another queue closes that
+        // window. The bounded wait turns a wedged child into a clean failure, not a hang.
+        let stderrBox = DataBox()
+        let drained = DispatchGroup()
+        drained.enter()
+        DispatchQueue.global().async {
+            stderrBox.data = err.fileHandleForReading.readDataToEndOfFile()
+            drained.leave()
+        }
+        let stdoutData = out.fileHandleForReading.readDataToEndOfFile()
+        if drained.wait(timeout: .now() + 30) == .timedOut {
+            process.terminate()
+            drained.wait()
+            XCTFail("pict \(arguments) did not exit within 30 s")
+        }
         process.waitUntilExit()
-        return Output(stdout: stdout, stderr: stderr, status: process.terminationStatus)
+        return Output(stdout: String(data: stdoutData, encoding: .utf8) ?? "",
+                      stderr: String(data: stderrBox.data, encoding: .utf8) ?? "",
+                      status: process.terminationStatus)
     }
 
     /// The checked-in fixture PNG, bundled as a `Bundle.module` test resource (returned
