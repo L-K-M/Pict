@@ -66,6 +66,10 @@ struct SyncOverridesCommand: ParsableCommand {
             watchers.append(watcher)
         }
 
+        // Close the race between `run`'s initial sync and the watchers arming: a change that
+        // landed in that window fired no callback, so sync once more now that we're watching.
+        resync()
+
         print("Watching the store and system applications for changes; press Ctrl-C to stop.")
         withExtendedLifetime(watchers) { dispatchMain() }
     }
@@ -76,6 +80,9 @@ struct SyncOverridesCommand: ParsableCommand {
         let raw = ProcessInfo.processInfo.environment["XDG_DATA_DIRS"]
         let dirs = (raw?.isEmpty == false ? raw! : "/usr/local/share:/usr/share")
             .split(separator: ":").map(String.init)
+            // The freedesktop base-dir spec says relative $XDG_DATA_DIRS entries are invalid
+            // and must be ignored; watching one would resolve against an arbitrary cwd.
+            .filter { $0.hasPrefix("/") }
         return dirs.map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("applications", isDirectory: true) }
     }
     #endif

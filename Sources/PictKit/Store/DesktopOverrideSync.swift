@@ -64,7 +64,8 @@ public struct DesktopOverrideSync {
         var summary = Summary()
         try? fileManager.createDirectory(at: overridesDirectory, withIntermediateDirectories: true)
 
-        var wanted = Set<String>()   // absolute paths of overrides we (re)generated
+        var wanted = Set<String>()         // absolute paths of overrides we (re)generated
+        var claimed: [String: String] = [:]   // override filename → the system path that owns it
         for (key, entry) in store.entries where isDesktopKey(key) {
             guard entry.origin.needsImage, let image = entry.image else { summary.skipped += 1; continue }
             let systemPath = key.value
@@ -76,10 +77,20 @@ public struct DesktopOverrideSync {
             }
             let iconPath = store.entriesDirectory.appendingPathComponent(image)
                 .standardizedFileURL.path
-            let overrideURL = overridesDirectory.appendingPathComponent(overrideFilename(forSystemPath: systemPath))
-            wanted.insert(overrideURL.standardizedFileURL.path)
-
             let newContent = DesktopEntryRewriter.rewrite(systemText, iconPath: iconPath)
+            // A system entry we couldn't rewrite (no [Desktop Entry] group — corrupt, empty)
+            // must not be written unmarked, since it could never be reaped. Skip it, and
+            // don't claim its override path — so a stale one there is still reaped.
+            guard DesktopEntryRewriter.isManaged(newContent) else { summary.skipped += 1; continue }
+
+            let overrideName = overrideFilename(forSystemPath: systemPath)
+            // Two entries resolving to the same override id would fight over one file and
+            // flap by dictionary-iteration order; the first to claim the name wins.
+            if let owner = claimed[overrideName], owner != systemPath { summary.skipped += 1; continue }
+            claimed[overrideName] = systemPath
+
+            let overrideURL = overridesDirectory.appendingPathComponent(overrideName)
+            wanted.insert(overrideURL.standardizedFileURL.path)
             if writeIfChanged(newContent, to: overrideURL) { summary.written += 1 }
         }
 
@@ -108,9 +119,20 @@ public struct DesktopOverrideSync {
 
     /// Writes `content` to `url` only when it differs from what's already there, so a
     /// no-op sync doesn't churn mtimes (and file watchers). Returns whether it wrote.
+    ///
+    /// Refuses to clobber a file Pict didn't write: if an existing file at `url` carries no
+    /// `X-Pict-Managed=true` marker, a hand-authored entry shadowing the same desktop-file
+    /// id has claimed that path, and we leave it exactly as it is — matching the removal
+    /// pass, which also never touches an unmarked file. (Overwriting it would be worse than
+    /// churn: the copy we'd write carries the marker, so a later `pict remove` + sync would
+    /// then reap the user's own file outright.)
     private func writeIfChanged(_ content: String, to url: URL) -> Bool {
-        if let existing = try? String(contentsOf: url, encoding: .utf8), existing == content {
-            return false
+        if let existing = try? String(contentsOf: url, encoding: .utf8) {
+            if existing == content { return false }
+            guard DesktopEntryRewriter.isManaged(existing) else {
+                NSLog("PictKit: refusing to overwrite a desktop file Pict didn't write: %@", url.path)
+                return false
+            }
         }
         do {
             try content.data(using: .utf8)?.write(to: url, options: .atomic)

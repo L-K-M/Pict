@@ -2,6 +2,8 @@
 import XCTest
 @testable import PictKit
 
+private struct StoreWriteFailed: Error {}
+
 final class DesktopOverrideSyncTests: XCTestCase {
 
     private var root: URL!
@@ -23,7 +25,9 @@ final class DesktopOverrideSyncTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        if let root { try? FileManager.default.removeItem(at: root) }
+        if let root, FileManager.default.fileExists(atPath: root.path) {
+            try FileManager.default.removeItem(at: root)
+        }
     }
 
     /// A store holding one entry keyed to the fake system `.desktop`.
@@ -34,7 +38,8 @@ final class DesktopOverrideSyncTests: XCTestCase {
         for _ in 0..<(64 * 64) { samples += [0, 0, 200, 255] }   // opaque blue, premultiplied
         let image = try XCTUnwrap(PixelImage(width: 64, height: 64, samples: samples))
         guard case .success = store.setIcon(image, for: target) else {
-            throw XCTSkip("store write failed")
+            XCTFail("store write failed")
+            throw StoreWriteFailed()
         }
         return (store, target)
     }
@@ -88,8 +93,43 @@ final class DesktopOverrideSyncTests: XCTestCase {
         // Even after the entry is gone — so the removal pass runs over the directory — a
         // file without the X-Pict-Managed marker is left exactly as it was.
         store.clear(for: target)
+        let reap = sync.sync()
+        XCTAssertEqual(reap.removed, 1, "our own firefox override is reaped")
+        XCTAssertEqual(try String(contentsOf: hand, encoding: .utf8), handContent,
+                       "the hand-authored file, distinct id, is untouched")
+    }
+
+    func testDoesNotClobberAHandAuthoredFileWithTheSameID() throws {
+        // A user's own override already occupies the exact filename our entry resolves to.
+        let (store, target) = try makeStoreWithFirefoxEntry()
+        try FileManager.default.createDirectory(at: overridesDir, withIntermediateDirectories: true)
+        let handContent = "[Desktop Entry]\nName=My Firefox\nIcon=my-firefox\n"
+        try handContent.write(to: override, atomically: true, encoding: .utf8)
+
+        let sync = DesktopOverrideSync(store: store, overridesDirectory: overridesDir)
+        let summary = sync.sync()
+        // We must not write over it (its lack of the marker means it isn't ours), and since
+        // it wasn't written it isn't counted.
+        XCTAssertEqual(summary.written, 0)
+        XCTAssertEqual(try String(contentsOf: override, encoding: .utf8), handContent,
+                       "an unmarked file at our id is never overwritten")
+
+        // And removing the entry must not reap it either — it was never ours to delete.
+        store.clear(for: target)
         _ = sync.sync()
-        XCTAssertEqual(try String(contentsOf: hand, encoding: .utf8), handContent)
+        XCTAssertEqual(try String(contentsOf: override, encoding: .utf8), handContent,
+                       "an unmarked file at our id is never reaped")
+    }
+
+    func testASystemEntryWithoutADesktopEntryGroupIsSkipped() throws {
+        // A corrupt/empty system file the rewriter can't mark must not be written unmarked
+        // (it could never be reaped) — it's skipped instead.
+        try "[Some Other Group]\nIcon=x\n".write(to: systemDesktop, atomically: true, encoding: .utf8)
+        let (store, _) = try makeStoreWithFirefoxEntry()
+        let summary = DesktopOverrideSync(store: store, overridesDirectory: overridesDir).sync()
+        XCTAssertEqual(summary.written, 0)
+        XCTAssertEqual(summary.skipped, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: override.path))
     }
 
     func testAMissingSystemEntryIsSkipped() throws {

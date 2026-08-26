@@ -72,6 +72,19 @@ final class DesktopEntryRewriterTests: XCTestCase {
         XCTAssertEqual(DesktopEntryRewriter.rewrite(input, iconPath: "/p.png"), input)
     }
 
+    func testCarriageReturnLineEndingsAreHandledAndPreserved() {
+        // A CRLF file: the `[Desktop Entry]\r` header must still be recognized, the icon
+        // replaced, and the file left with CRLF endings (not a mix).
+        let input = "[Desktop Entry]\r\nName=Win\r\nIcon=win\r\n"
+        let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/win.png")
+        XCTAssertTrue(out.contains("Icon=/store/win.png"), out)   // header was found despite \r
+        XCTAssertFalse(out.contains("Icon=win\r"), out)           // old value gone
+        XCTAssertTrue(out.contains("X-Pict-Managed=true\r\n") || out.hasSuffix("X-Pict-Managed=true\r\n"),
+                      out)                                         // marker uses CRLF too
+        XCTAssertFalse(out.contains("\n\n"), "no stray LF-only lines introduced")
+        XCTAssertTrue(out.hasSuffix("\r\n"), "trailing CRLF preserved")
+    }
+
     func testIsManaged() {
         XCTAssertTrue(DesktopEntryRewriter.isManaged("[Desktop Entry]\nName=A\nX-Pict-Managed=true\n"))
         XCTAssertFalse(DesktopEntryRewriter.isManaged("[Desktop Entry]\nName=A\nIcon=x\n"))

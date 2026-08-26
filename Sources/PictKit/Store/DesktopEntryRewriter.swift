@@ -35,12 +35,16 @@ public enum DesktopEntryRewriter {
     public static func rewrite(_ content: String, iconPath: String) -> String {
         guard content.range(of: "[Desktop Entry]") != nil else { return content }
 
+        // Preserve the file's line terminator (LF or CRLF): splitting and rejoining on the
+        // detected separator means a CRLF `[Desktop Entry]\r` header is still recognized
+        // and the rewritten file isn't left with mixed endings.
+        let separator = content.contains("\r\n") ? "\r\n" : "\n"
         // Normalize the trailing newline out so `components(separatedBy:)` doesn't yield a
         // spurious empty final element that group-end insertions would straddle; re-add it
         // at the end so the file keeps its original terminator.
-        let hadTrailingNewline = content.hasSuffix("\n")
-        let body = hadTrailingNewline ? String(content.dropLast()) : content
-        let lines = body.components(separatedBy: "\n")
+        let hadTrailingNewline = content.hasSuffix(separator)
+        let body = hadTrailingNewline ? String(content.dropLast(separator.count)) : content
+        let lines = body.components(separatedBy: separator)
 
         var out: [String] = []
         out.reserveCapacity(lines.count + 2)
@@ -73,7 +77,7 @@ public enum DesktopEntryRewriter {
         }
         closeGroup()   // the [Desktop Entry] group may run to end-of-file
 
-        return out.joined(separator: "\n") + (hadTrailingNewline ? "\n" : "")
+        return out.joined(separator: separator) + (hadTrailingNewline ? separator : "")
     }
 
     // MARK: - Parsing helpers
@@ -93,7 +97,8 @@ public enum DesktopEntryRewriter {
                                                _ predicate: (String, String) -> Bool) -> Bool {
         var inTarget = false
         for line in content.components(separatedBy: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // whitespacesAndNewlines so a CRLF file's trailing `\r` doesn't hide the header.
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.hasPrefix("["), trimmed.hasSuffix("]") {
                 inTarget = (trimmed == "[Desktop Entry]")
                 continue
