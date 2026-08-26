@@ -108,9 +108,10 @@ final class DesktopOverrideSyncTests: XCTestCase {
 
         let sync = DesktopOverrideSync(store: store, overridesDirectory: overridesDir)
         let summary = sync.sync()
-        // We must not write over it (its lack of the marker means it isn't ours), and since
-        // it wasn't written it isn't counted.
+        // We must not write over it (its lack of the marker means it isn't ours), and the
+        // refusal surfaces as skipped rather than vanishing into a "0 written, 0 skipped".
         XCTAssertEqual(summary.written, 0)
+        XCTAssertEqual(summary.skipped, 1)
         XCTAssertEqual(try String(contentsOf: override, encoding: .utf8), handContent,
                        "an unmarked file at our id is never overwritten")
 
@@ -119,6 +120,42 @@ final class DesktopOverrideSyncTests: XCTestCase {
         _ = sync.sync()
         XCTAssertEqual(try String(contentsOf: override, encoding: .utf8), handContent,
                        "an unmarked file at our id is never reaped")
+    }
+
+    func testChangingTheSystemEntryRewritesTheOverride() throws {
+        // The override is regenerated from the *current* system entry each sync: when the
+        // app updates its .desktop (new Name/Exec), the shadow must pick the change up.
+        // (Changing only the store icon does NOT rewrite the override — the PNG filename is
+        // key-derived and stable, so the Icon= path is unchanged and the shell reloads the
+        // rewritten PNG at that same path; that no-op case is covered by testResyncIsANoOp.)
+        let (store, _) = try makeStoreWithFirefoxEntry()
+        let sync = DesktopOverrideSync(store: store, overridesDirectory: overridesDir)
+        XCTAssertEqual(sync.sync().written, 1)
+
+        try "[Desktop Entry]\nName=Firefox ESR\nExec=firefox-esr %u\nIcon=firefox\n"
+            .write(to: systemDesktop, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(sync.sync().written, 1, "a stale override is regenerated from the new system entry")
+        let content = try String(contentsOf: override, encoding: .utf8)
+        XCTAssertTrue(content.contains("Name=Firefox ESR"), content)
+        XCTAssertTrue(content.contains("Exec=firefox-esr %u"), content)
+        XCTAssertTrue(content.contains("X-Pict-Managed=true"), content)
+    }
+
+    func testAnUnreadableNonUTF8OverrideIsNeverOverwritten() throws {
+        // An existing override that can't be decoded as UTF-8 (a legacy-encoded .desktop)
+        // isn't one of ours — `try? String(contentsOf:)` returns nil for it just as for an
+        // absent file, and it must be refused, not clobbered.
+        let (store, _) = try makeStoreWithFirefoxEntry()
+        try FileManager.default.createDirectory(at: overridesDir, withIntermediateDirectories: true)
+        // 0xFF 0xFE is not valid UTF-8; write raw bytes to the id our entry resolves to.
+        let raw = Data([0xFF, 0xFE, 0x00, 0x41, 0x0A])
+        try raw.write(to: override)
+
+        let summary = DesktopOverrideSync(store: store, overridesDirectory: overridesDir).sync()
+        XCTAssertEqual(summary.written, 0)
+        XCTAssertEqual(summary.skipped, 1)
+        XCTAssertEqual(try Data(contentsOf: override), raw, "the undecodable file is left byte-for-byte")
     }
 
     func testASystemEntryWithoutADesktopEntryGroupIsSkipped() throws {

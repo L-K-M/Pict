@@ -91,7 +91,13 @@ public struct DesktopOverrideSync {
 
             let overrideURL = overridesDirectory.appendingPathComponent(overrideName)
             wanted.insert(overrideURL.standardizedFileURL.path)
-            if writeIfChanged(newContent, to: overrideURL) { summary.written += 1 }
+            switch writeIfChanged(newContent, to: overrideURL) {
+            case .written: summary.written += 1
+            // A refusal (a hand-authored file at our id) or an I/O failure means the entry
+            // wasn't applied — count it as skipped so the summary isn't a misleading "0/0/0".
+            case .refused, .failed: summary.skipped += 1
+            case .unchanged: break
+            }
         }
 
         summary.removed = removeStaleOverrides(keeping: wanted)
@@ -106,9 +112,21 @@ public struct DesktopOverrideSync {
         key.kind == .app && key.value.lowercased().hasSuffix(".desktop")
     }
 
-    /// The override's filename: the system entry's freedesktop **desktop-file ID** with
-    /// its `.desktop` suffix — the path under an `applications/` directory with `/` → `-`
-    /// (so a subdirectory'd entry shadows correctly), falling back to the bare basename.
+    /// The override's filename: the system entry's freedesktop **desktop-file ID** with its
+    /// `.desktop` suffix — the path under an `applications/` directory with `/` → `-` (so a
+    /// subdirectory'd entry like `applications/kde/foo.desktop` shadows as `kde-foo.desktop`,
+    /// per the spec's "path relative to the data-dir's `applications/`, `/` → `-`" rule).
+    ///
+    /// For all realistic paths — every entry actually lives under some
+    /// `$XDG_DATA_DIRS/applications` — the first `/applications/` is the data-dir boundary,
+    /// so this matches the spec ID exactly. The bare-basename fallback only fires for a path
+    /// that names no `applications/` component at all (e.g. a hand-typed
+    /// `app:/opt/x/foo.desktop`); that is best-effort and could in principle shadow an
+    /// unrelated app that happens to own the id `foo.desktop`. Resolving it precisely would
+    /// mean matching against the live `$XDG_DATA_HOME`/`$XDG_DATA_DIRS` prefixes, which this
+    /// type doesn't take (tests drive it against a temp tree) — deferred rather than
+    /// widened here, since a store entry keyed outside every applications tree is unusual and
+    /// the user pointed at that path explicitly.
     private func overrideFilename(forSystemPath path: String) -> String {
         let marker = "/applications/"
         if let range = path.range(of: marker) {
@@ -117,29 +135,41 @@ public struct DesktopOverrideSync {
         return (path as NSString).lastPathComponent
     }
 
+    /// The result of a `writeIfChanged` attempt, so `sync` can surface a refusal or an I/O
+    /// failure as `skipped` rather than let it vanish into a "0 written, 0 skipped" line.
+    private enum WriteOutcome { case written, unchanged, refused, failed }
+
     /// Writes `content` to `url` only when it differs from what's already there, so a
-    /// no-op sync doesn't churn mtimes (and file watchers). Returns whether it wrote.
+    /// no-op sync doesn't churn mtimes (and file watchers).
     ///
-    /// Refuses to clobber a file Pict didn't write: if an existing file at `url` carries no
-    /// `X-Pict-Managed=true` marker, a hand-authored entry shadowing the same desktop-file
-    /// id has claimed that path, and we leave it exactly as it is — matching the removal
-    /// pass, which also never touches an unmarked file. (Overwriting it would be worse than
-    /// churn: the copy we'd write carries the marker, so a later `pict remove` + sync would
-    /// then reap the user's own file outright.)
-    private func writeIfChanged(_ content: String, to url: URL) -> Bool {
-        if let existing = try? String(contentsOf: url, encoding: .utf8) {
-            if existing == content { return false }
+    /// Refuses to clobber a file Pict didn't write. An existing file at `url` that either
+    /// carries no `X-Pict-Managed=true` marker *or can't be read back as UTF-8* (our own
+    /// overrides always are) belongs to a hand-authored entry shadowing the same
+    /// desktop-file id, and we leave it exactly as it is — matching the removal pass, which
+    /// also never touches an unmarked file. The UTF-8 check is why we test existence
+    /// explicitly first: `try? String(contentsOf:)` returns `nil` both for an absent file
+    /// *and* for a present-but-undecodable one (a legacy-encoded `.desktop`), and reading
+    /// the latter as "absent" would overwrite it — worse than churn, since the copy we'd
+    /// write carries the marker, so a later `pict remove` + sync would then reap the user's
+    /// own file outright.
+    private func writeIfChanged(_ content: String, to url: URL) -> WriteOutcome {
+        if fileManager.fileExists(atPath: url.path) {
+            guard let existing = try? String(contentsOf: url, encoding: .utf8) else {
+                NSLog("PictKit: refusing to overwrite an unreadable desktop file Pict didn't write: %@", url.path)
+                return .refused
+            }
+            if existing == content { return .unchanged }
             guard DesktopEntryRewriter.isManaged(existing) else {
                 NSLog("PictKit: refusing to overwrite a desktop file Pict didn't write: %@", url.path)
-                return false
+                return .refused
             }
         }
         do {
             try content.data(using: .utf8)?.write(to: url, options: .atomic)
-            return true
+            return .written
         } catch {
             NSLog("PictKit: couldn't write desktop override %@: %@", url.path, error.localizedDescription)
-            return false
+            return .failed
         }
     }
 

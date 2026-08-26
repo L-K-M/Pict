@@ -56,8 +56,10 @@ final class DesktopEntryRewriterTests: XCTestCase {
         let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/app.png")
         XCTAssertTrue(out.contains("Icon=/store/app.png"), out)   // [Desktop Entry] replaced
         XCTAssertTrue(out.contains("Icon=app-new"), out)          // the action's icon left alone
-        // The marker is in the main group, not the action group.
-        XCTAssertTrue(out.contains("X-Pict-Managed=true"), out)
+        // The marker must land in the main group, before the action header — not just be
+        // present somewhere (a parser ignores X-Pict-Managed inside [Desktop Action]).
+        let mainGroup = out[..<(out.range(of: "[Desktop Action")?.lowerBound ?? out.endIndex)]
+        XCTAssertTrue(mainGroup.contains("X-Pict-Managed=true"), out)
     }
 
     func testLocalizedIconIsNotTouched() {
@@ -79,14 +81,42 @@ final class DesktopEntryRewriterTests: XCTestCase {
         let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/win.png")
         XCTAssertTrue(out.contains("Icon=/store/win.png"), out)   // header was found despite \r
         XCTAssertFalse(out.contains("Icon=win\r"), out)           // old value gone
-        XCTAssertTrue(out.contains("X-Pict-Managed=true\r\n") || out.hasSuffix("X-Pict-Managed=true\r\n"),
-                      out)                                         // marker uses CRLF too
-        XCTAssertFalse(out.contains("\n\n"), "no stray LF-only lines introduced")
+        XCTAssertTrue(out.contains("X-Pict-Managed=true\r\n"), out) // marker uses CRLF too
+        // Every terminator is CRLF — strip the \r\n pairs and no lone \n may remain.
+        XCTAssertFalse(out.replacingOccurrences(of: "\r\n", with: "").contains("\n"),
+                       "no stray LF-only lines introduced")
         XCTAssertTrue(out.hasSuffix("\r\n"), "trailing CRLF preserved")
+    }
+
+    func testMixedLineEndingsDoNotDropLines() {
+        // A pathological file mixing CRLF and lone LF: the old separator-split would have
+        // glued "Icon=win\nName=Win" into one element and the Icon replacement would drop
+        // Name=Win. Splitting on \n (stripping \r) keeps every logical line.
+        let input = "[Desktop Entry]\r\nIcon=win\nName=Win\r\nExec=win %u\r\n"
+        let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/win.png")
+        XCTAssertTrue(out.contains("Icon=/store/win.png"), out)
+        XCTAssertTrue(out.contains("Name=Win"), out)              // not swallowed by the Icon line
+        XCTAssertTrue(out.contains("Exec=win %u"), out)
+        XCTAssertTrue(out.contains("X-Pict-Managed=true"), out)
+    }
+
+    func testALeadingBOMDoesNotHideTheGroup() {
+        // A UTF-8 BOM before the header: GLib reads it fine, so we must too — the entry is
+        // rewritten (not silently skipped) and reads back as managed.
+        let input = "\u{FEFF}[Desktop Entry]\nName=B\nIcon=b\n"
+        let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/b.png")
+        XCTAssertTrue(out.contains("Icon=/store/b.png"), out)
+        XCTAssertTrue(out.contains("Name=B"), out)
+        XCTAssertTrue(DesktopEntryRewriter.isManaged(out), out)
     }
 
     func testIsManaged() {
         XCTAssertTrue(DesktopEntryRewriter.isManaged("[Desktop Entry]\nName=A\nX-Pict-Managed=true\n"))
+        // rewrite() emits CRLF markers for CRLF sources, so isManaged must recognize its own
+        // CRLF-marked overrides — otherwise sync treats them as hand-authored (never updated,
+        // never reaped).
+        XCTAssertTrue(DesktopEntryRewriter.isManaged("[Desktop Entry]\r\nName=A\r\nX-Pict-Managed=true\r\n"),
+                      "our own CRLF-marked override must round-trip as managed")
         XCTAssertFalse(DesktopEntryRewriter.isManaged("[Desktop Entry]\nName=A\nIcon=x\n"))
         // The marker only counts inside [Desktop Entry], not another group.
         XCTAssertFalse(DesktopEntryRewriter.isManaged("[Other]\nX-Pict-Managed=true\n"))

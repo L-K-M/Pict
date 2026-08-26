@@ -11,6 +11,14 @@ import Foundation
 /// touched, and an `X-Pict-Managed=true` marker is ensured so the sync can tell its own
 /// overrides from files it must never delete.
 ///
+/// **Known limitation (by the plan's design):** a locale-suffixed `Icon[xx]=` key is left
+/// as-is. Per the freedesktop spec a matching localized key overrides the plain `Icon=` in
+/// that locale, so on a system entry that ships an `Icon[xx]=` the override will keep the
+/// original icon for users in locale `xx`. Localized `Icon` keys are vanishingly rare (an
+/// icon is normally locale-independent — it's `Name`/`Comment` that get localized), and
+/// replacing them would deviate from "only `Icon=` replaced"; the plain-`Icon=`-only edit
+/// is the deliberate choice.
+///
 /// Pure and platform-neutral so it can be unit-tested on both CIs; `DesktopOverrideSync`,
 /// which drives it against the filesystem, is Linux-only.
 public enum DesktopEntryRewriter {
@@ -35,16 +43,24 @@ public enum DesktopEntryRewriter {
     public static func rewrite(_ content: String, iconPath: String) -> String {
         guard content.range(of: "[Desktop Entry]") != nil else { return content }
 
-        // Preserve the file's line terminator (LF or CRLF): splitting and rejoining on the
-        // detected separator means a CRLF `[Desktop Entry]\r` header is still recognized
-        // and the rewritten file isn't left with mixed endings.
+        // Preserve the file's line terminator (LF or CRLF) on the way out.
         let separator = content.contains("\r\n") ? "\r\n" : "\n"
-        // Normalize the trailing newline out so `components(separatedBy:)` doesn't yield a
-        // spurious empty final element that group-end insertions would straddle; re-add it
-        // at the end so the file keeps its original terminator.
-        let hadTrailingNewline = content.hasSuffix(separator)
-        let body = hadTrailingNewline ? String(content.dropLast(separator.count)) : content
-        let lines = body.components(separatedBy: separator)
+        // Normalize CRLF → LF *before* splitting. Swift treats `\r\n` as a single Character,
+        // so `components(separatedBy: "\n")` would not split CRLF content at all; and
+        // splitting on the detected `\r\n` separator would instead glue a lone-LF line onto
+        // its neighbor in a mixed-ending file, letting the `Icon=` replacement silently drop
+        // a logical line. Replacing `\r\n` (which does match the grapheme) sidesteps both;
+        // rejoining on `separator` restores the file's ending byte-for-byte.
+        let normalized = content.replacingOccurrences(of: "\r\n", with: "\n")
+        // Normalize a single trailing newline out so the split doesn't yield a spurious empty
+        // final element that group-end insertions would straddle; re-add it at the end.
+        let hadTrailingNewline = normalized.hasSuffix("\n")
+        var body = hadTrailingNewline ? String(normalized.dropLast()) : normalized
+        // A leading UTF-8 BOM would glue onto the `[Desktop Entry]` header and hide it —
+        // GLib tolerates a BOM, so such a file is valid and must still be rewritten, not
+        // silently skipped. Drop it (the generated override needn't carry one).
+        if body.hasPrefix("\u{FEFF}") { body.removeFirst() }
+        let lines = body.components(separatedBy: "\n")
 
         var out: [String] = []
         out.reserveCapacity(lines.count + 2)
@@ -96,8 +112,12 @@ public enum DesktopEntryRewriter {
     private static func forEachDesktopEntryKey(_ content: String,
                                                _ predicate: (String, String) -> Bool) -> Bool {
         var inTarget = false
-        for line in content.components(separatedBy: "\n") {
-            // whitespacesAndNewlines so a CRLF file's trailing `\r` doesn't hide the header.
+        // Normalize CRLF → LF (Swift won't split the `\r\n` grapheme on `\n`) and strip a
+        // leading BOM, mirroring `rewrite`, so our own CRLF-/BOM-authored overrides still
+        // read as managed instead of being mistaken for hand-authored files.
+        var scan = content.replacingOccurrences(of: "\r\n", with: "\n")
+        if scan.hasPrefix("\u{FEFF}") { scan.removeFirst() }
+        for line in scan.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.hasPrefix("["), trimmed.hasSuffix("]") {
                 inTarget = (trimmed == "[Desktop Entry]")
