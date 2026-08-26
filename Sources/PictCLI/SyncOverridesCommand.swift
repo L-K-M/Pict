@@ -84,6 +84,14 @@ struct SyncOverridesCommand: ParsableCommand {
     /// each `$XDG_DATA_DIRS/applications` (defaulting to the spec's `/usr/local/share:/usr/share`),
     /// deduplicated and minus the overrides directory we write into. Pure in its inputs so it
     /// can be unit-tested without touching the process environment.
+    ///
+    /// Note: with the default `--applications` the overrides directory *is*
+    /// `$XDG_DATA_HOME/applications`, so it's excluded here to avoid looping on our own
+    /// writes — which means a user-scope app installed straight into that directory won't
+    /// auto-trigger a resync in `--watch` mode until the next store change or manual run.
+    /// (Such an app's entry already lives at the winning location, so there's nothing lower
+    /// to shadow anyway.) Watching the write target safely would need per-write event
+    /// filtering plus debounce — a daemon feature beyond this command's scope.
     static func applicationDirectoriesToWatch(environment: [String: String],
                                               excluding overrides: URL) -> [URL] {
         // Relative $XDG_DATA_HOME/$XDG_DATA_DIRS entries are invalid per the freedesktop

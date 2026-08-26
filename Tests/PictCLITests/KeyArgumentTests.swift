@@ -175,6 +175,7 @@ final class KeyArgumentTests: XCTestCase {
         // "relative/dir" would join to "relative/dir/applications" if it weren't filtered.
         XCTAssertFalse(dirs.contains("relative/dir/applications"), "relative entries are ignored")
         XCTAssertTrue(dirs.allSatisfy { $0.hasPrefix("/") }, "every watched dir is absolute")
+        XCTAssertFalse(dirs.contains("/custom/apps"), "the overrides dir itself is never watched")
     }
 
     func testWatchDirsExcludeAnOverridesDirReachedViaASymlink() throws {

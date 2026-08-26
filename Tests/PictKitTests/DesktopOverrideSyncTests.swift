@@ -66,9 +66,14 @@ final class DesktopOverrideSyncTests: XCTestCase {
     }
 
     func testResyncIsANoOpWhenNothingChanged() throws {
-        let (store, _) = try makeStoreWithFirefoxEntry()
+        let (store, target) = try makeStoreWithFirefoxEntry()
         let sync = DesktopOverrideSync(store: store, overridesDirectory: overridesDir)
         XCTAssertEqual(sync.sync().written, 1)
+        // Re-saving the icon rewrites the PNG at its stable, key-derived path, so the
+        // override's Icon= line is unchanged and the resync must stay a no-op — the
+        // "changing only the store icon doesn't rewrite the override" path my comment in
+        // testChangingTheSystemEntryRewritesTheOverride refers to.
+        _ = store.setIcon(try makeOpaqueBlueImage(), for: target)
         let resync = sync.sync()
         XCTAssertEqual(resync.written, 0, "an unchanged override is not rewritten")
         XCTAssertEqual(resync.removed, 0, "an unchanged override is not reaped either")
@@ -179,10 +184,29 @@ final class DesktopOverrideSyncTests: XCTestCase {
         XCTAssertEqual(first.skipped, 1, "the losing collider is skipped")
         XCTAssertTrue(try String(contentsOf: overrideFoo, encoding: .utf8).contains("Name=Alpha"),
                       "the lowest system path wins")
-        // Deterministic winner ⇒ the re-sync sees identical content and doesn't flap it.
+        // Dictionary order is stable within one process, so this re-sync only guards against
+        // redundant rewrites; cross-process determinism rests on the lowest-path (Name=Alpha)
+        // assertion above, which the two-pass winner resolution enforces regardless of order.
         let again = sync.sync()
-        XCTAssertEqual(again.written, 0, "no churn: the winner doesn't change across syncs")
+        XCTAssertEqual(again.written, 0, "no churn across syncs within one process")
         XCTAssertTrue(try String(contentsOf: overrideFoo, encoding: .utf8).contains("Name=Alpha"))
+    }
+
+    func testAnEntryWhoseStoredImageIsMissingIsSkipped() throws {
+        // Store drift (a partial delete / interrupted copy): the entry names a PNG that isn't
+        // on disk. Don't write an override pointing at nothing — skip it.
+        let (store, _) = try makeStoreWithFirefoxEntry()
+        let pngs = (try FileManager.default.contentsOfDirectory(atPath: store.entriesDirectory.path))
+            .filter { $0.hasSuffix(".png") }
+        XCTAssertFalse(pngs.isEmpty, "fixture wrote a PNG")
+        for png in pngs {
+            try FileManager.default.removeItem(at: store.entriesDirectory.appendingPathComponent(png))
+        }
+
+        let summary = DesktopOverrideSync(store: store, overridesDirectory: overridesDir).sync()
+        XCTAssertEqual(summary.written, 0)
+        XCTAssertEqual(summary.skipped, 1, "an entry whose stored image is missing is skipped")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: override.path))
     }
 
     func testAnUnreadableNonUTF8OverrideIsNeverOverwritten() throws {

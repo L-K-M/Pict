@@ -87,6 +87,10 @@ public struct DesktopOverrideSync {
             }
             let iconPath = store.entriesDirectory.appendingPathComponent(image)
                 .standardizedFileURL.path
+            // If the store index and its entries dir have drifted (a partial delete, an
+            // interrupted copy), don't point an override at a PNG that isn't there — skip it,
+            // and let the removal pass reap any stale override so the system icon returns.
+            guard fileManager.fileExists(atPath: iconPath) else { summary.skipped += 1; continue }
             let newContent = DesktopEntryRewriter.rewrite(systemText, iconPath: iconPath)
             // A system entry we couldn't rewrite (no [Desktop Entry] group — corrupt, empty,
             // or an icon path with a line break) must not be written unmarked, since it could

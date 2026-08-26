@@ -67,11 +67,32 @@ final class DesktopEntryRewriterTests: XCTestCase {
         // `Icon` is a spec localestring, so a localized `Icon[de]=` would take precedence
         // over our managed plain `Icon=` in a German locale and keep showing the old icon.
         // The override is a fresh copy (the system entry is untouched), so it's dropped.
-        let input = "[Desktop Entry]\nIcon=app\nIcon[de]=app-de\nName=App\n"
+        let input = "[Desktop Entry]\nIcon=app\nIcon[de]=app-de\nName=App\nName[de]=AppDE\n"
         let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/app.png")
         XCTAssertTrue(out.contains("Icon=/store/app.png"), out)   // plain Icon replaced
-        XCTAssertFalse(out.contains("Icon[de]="), out)            // localized dropped, can't shadow
+        XCTAssertFalse(out.contains("Icon[de]="), out)            // localized Icon dropped, can't shadow
         XCTAssertTrue(out.contains("Name=App"), out)              // other keys untouched
+        XCTAssertTrue(out.contains("Name[de]=AppDE"), out)        // only Icon[xx] is dropped, not all localized keys
+    }
+
+    func testWhitespaceAroundEqualsIsRecognized() {
+        // GLib treats `Icon = foo` as `Icon=foo`, so a padded key must be recognized and
+        // replaced (not left in place with a second Icon= appended), and a padded marker /
+        // localized key handled the same way.
+        let input = "[Desktop Entry]\nIcon = old\nIcon[de] = old-de\nX-Pict-Managed = true\n"
+        let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/app.png")
+        XCTAssertEqual(out.components(separatedBy: "Icon=").count - 1, 1, "exactly one Icon= line: \(out)")
+        XCTAssertTrue(out.contains("Icon=/store/app.png"), out)
+        XCTAssertFalse(out.contains("old"), out)                  // padded Icon and Icon[de] both gone
+        XCTAssertTrue(DesktopEntryRewriter.isManaged(out), out)   // padded marker still recognized
+    }
+
+    func testAnIconPathContainingASpaceIsWrittenVerbatim() {
+        // Icon is a plain path, never shell-parsed — a space must survive verbatim rather
+        // than being quoted or percent-encoded.
+        let out = DesktopEntryRewriter.rewrite("[Desktop Entry]\nIcon=old\n", iconPath: "/store/My App.png")
+        XCTAssertTrue(out.contains("Icon=/store/My App.png"), out)
+        XCTAssertFalse(out.contains("Icon=old"), out)
     }
 
     func testAnIconPathWithALineBreakLeavesTheInputUnchanged() {

@@ -7,8 +7,8 @@ import Foundation
 /// It is deliberately a **line-level** edit, not a parse-and-reserialize: the plan's rule
 /// is "the current system entry with only `Icon=` replaced", so every other line — order,
 /// comments, blank lines, other groups, localized `Name`/`Comment` keys — is preserved
-/// line for line (a mixed LF/CRLF file is normalized to its dominant terminator, and a
-/// leading BOM is dropped; a single-ending file comes out byte-identical apart from the
+/// line for line (a file that uses CRLF anywhere is normalized to all-CRLF, and a leading
+/// BOM is dropped; a uniformly single-ending file comes out byte-identical apart from the
 /// edits below). The `[Desktop Entry]` group's plain `Icon=` is set to the store icon, an
 /// `X-Pict-Managed=true` marker is ensured so the sync can tell its own overrides from
 /// files it must never delete, and — because `Icon` is a spec *localestring* — any
@@ -116,7 +116,10 @@ public enum DesktopEntryRewriter {
     private static func exactKey(of trimmedLine: String) -> String? {
         guard !trimmedLine.isEmpty, !trimmedLine.hasPrefix("#"), !trimmedLine.hasPrefix("["),
               let equals = trimmedLine.firstIndex(of: "=") else { return nil }
-        return String(trimmedLine[trimmedLine.startIndex..<equals])
+        // Trim whitespace around `=` (GLib treats `Icon = foo` as `Icon=foo`), so a padded
+        // key still matches "Icon" / a localized `Icon[xx]` / the marker — otherwise it would
+        // go unrecognized and rewrite would append a second, duplicate `Icon=` line.
+        return trimmedLine[trimmedLine.startIndex..<equals].trimmingCharacters(in: .whitespaces)
     }
 
     /// Runs `predicate(key, value)` over the plain-keyed lines of the `[Desktop Entry]`
