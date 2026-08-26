@@ -55,6 +55,7 @@ final class DesktopEntryRewriterTests: XCTestCase {
             """
         let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/app.png")
         XCTAssertTrue(out.contains("Icon=/store/app.png"), out)   // [Desktop Entry] replaced
+        XCTAssertTrue(out.contains("[Desktop Action New]"), out)  // the subgroup header survives
         XCTAssertTrue(out.contains("Icon=app-new"), out)          // the action's icon left alone
         // The marker must land in the main group, before the action header — not just be
         // present somewhere (a parser ignores X-Pict-Managed inside [Desktop Action]).
@@ -85,6 +86,15 @@ final class DesktopEntryRewriterTests: XCTestCase {
     func testWithoutDesktopEntryGroupReturnsInputUnchanged() {
         let input = "[Some Other Group]\nIcon=x\n"
         XCTAssertEqual(DesktopEntryRewriter.rewrite(input, iconPath: "/p.png"), input)
+    }
+
+    func testDesktopEntryOnlyInACommentOrValueIsNotAHeaderAndIsUnchanged() {
+        // The string appearing in a comment or a value is not a [Desktop Entry] *header*, so
+        // the file is returned completely unchanged (BOM and line endings included), matching
+        // the contract — not lightly mutated.
+        let commented = "\u{FEFF}[Other]\r\n# see [Desktop Entry] docs\r\nExec=echo \"[Desktop Entry]\"\r\n"
+        XCTAssertEqual(DesktopEntryRewriter.rewrite(commented, iconPath: "/p.png"), commented)
+        XCTAssertFalse(DesktopEntryRewriter.isManaged(commented))
     }
 
     func testCarriageReturnLineEndingsAreHandledAndPreserved() {

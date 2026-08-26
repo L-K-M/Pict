@@ -94,15 +94,19 @@ struct SyncOverridesCommand: ParsableCommand {
             ?? "/usr/local/share:/usr/share"
         let roots = [dataHome] + dataDirs.split(separator: ":").map(String.init).filter { $0.hasPrefix("/") }
 
-        let overridesPath = overrides.standardizedFileURL.path
+        // Canonicalize (resolve symlinks) for the exclusion/dedup comparison only — a
+        // `--applications` given as a symlinked alias of a real applications dir, or two
+        // roots that alias the same dir, must still collapse. The *returned* URLs stay as
+        // built so callers get the paths they expect.
+        let overridesPath = overrides.resolvingSymlinksInPath().path
         var seen = Set<String>()
         var result: [URL] = []
         for root in roots {
             let url = URL(fileURLWithPath: root, isDirectory: true)
                 .appendingPathComponent("applications", isDirectory: true)
-            let path = url.standardizedFileURL.path
-            if path == overridesPath { continue }     // never watch our own write target
-            if seen.insert(path).inserted { result.append(url) }
+            let canonical = url.resolvingSymlinksInPath().path
+            if canonical == overridesPath { continue }     // never watch our own write target
+            if seen.insert(canonical).inserted { result.append(url) }
         }
         return result
     }

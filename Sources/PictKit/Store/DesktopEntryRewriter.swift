@@ -7,7 +7,9 @@ import Foundation
 /// It is deliberately a **line-level** edit, not a parse-and-reserialize: the plan's rule
 /// is "the current system entry with only `Icon=` replaced", so every other line — order,
 /// comments, blank lines, other groups, localized `Name`/`Comment` keys — is preserved
-/// byte for byte. The `[Desktop Entry]` group's plain `Icon=` is set to the store icon, an
+/// line for line (a mixed LF/CRLF file is normalized to its dominant terminator, and a
+/// leading BOM is dropped; a single-ending file comes out byte-identical apart from the
+/// edits below). The `[Desktop Entry]` group's plain `Icon=` is set to the store icon, an
 /// `X-Pict-Managed=true` marker is ensured so the sync can tell its own overrides from
 /// files it must never delete, and — because `Icon` is a spec *localestring* — any
 /// localized `Icon[xx]=` is dropped: leaving one would let it shadow our managed icon in
@@ -37,12 +39,6 @@ public enum DesktopEntryRewriter {
     /// keys are absent they are appended at the end of the group. Returns the input
     /// unchanged if it has no `[Desktop Entry]` group.
     public static func rewrite(_ content: String, iconPath: String) -> String {
-        guard content.range(of: "[Desktop Entry]") != nil else { return content }
-        // A line break inside the icon path would inject extra key lines into the generated
-        // override (e.g. a second `Hidden=true` line), so refuse to build one — leave the
-        // input unchanged, which `DesktopOverrideSync` then skips as unmarkable.
-        guard !iconPath.contains("\n"), !iconPath.contains("\r") else { return content }
-
         // Preserve the file's line terminator (LF or CRLF) on the way out.
         let separator = content.contains("\r\n") ? "\r\n" : "\n"
         // Normalize CRLF → LF *before* splitting. Swift treats `\r\n` as a single Character,
@@ -61,6 +57,16 @@ public enum DesktopEntryRewriter {
         // silently skipped. Drop it (the generated override needn't carry one).
         if body.hasPrefix("\u{FEFF}") { body.removeFirst() }
         let lines = body.components(separatedBy: "\n")
+
+        // Detect a real `[Desktop Entry]` *header line*, not just the substring appearing in
+        // a comment or a value — otherwise "returns the input unchanged" would be violated
+        // (we'd hand back a BOM-stripped / ending-normalized copy). Mirrors the loop's rule.
+        guard lines.contains(where: { $0.trimmingCharacters(in: .whitespaces) == "[Desktop Entry]" })
+        else { return content }
+        // A line break inside the icon path would inject extra key lines into the generated
+        // override (e.g. a second `Hidden=true` line), so refuse to build one — leave the
+        // input unchanged, which `DesktopOverrideSync` then skips as unmarkable.
+        guard !iconPath.contains("\n"), !iconPath.contains("\r") else { return content }
 
         var out: [String] = []
         out.reserveCapacity(lines.count + 2)

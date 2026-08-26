@@ -34,8 +34,12 @@ public struct DesktopOverrideSync {
     /// desktop-file ID resolution. Mirrors how `IconStoreLocation.defaultDirectory()`
     /// derives `$XDG_DATA_HOME/Pict`.
     public static func defaultOverridesDirectory(fileManager: FileManager = .default) -> URL {
+        // Fall back to the spec's `$HOME/.local/share`, not a temp dir: an override under
+        // `$TMPDIR/applications` isn't on the desktop-file search path (so it would silently
+        // have no effect) and is ephemeral. The primary path mirrors IconStoreLocation.
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+                .appendingPathComponent(".local/share", isDirectory: true)
         return base.appendingPathComponent("applications", isDirectory: true)
     }
 

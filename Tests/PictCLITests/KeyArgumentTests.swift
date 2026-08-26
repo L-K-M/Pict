@@ -172,7 +172,31 @@ final class KeyArgumentTests: XCTestCase {
                       "XDG_DATA_HOME/applications is watched for user-scope installs")
         XCTAssertEqual(dirs.filter { $0 == "/usr/share/applications" }.count, 1,
                        "duplicate XDG_DATA_DIRS entries collapse to one watcher")
-        XCTAssertFalse(dirs.contains("relative/applications"), "relative entries are ignored")
+        // "relative/dir" would join to "relative/dir/applications" if it weren't filtered.
+        XCTAssertFalse(dirs.contains("relative/dir/applications"), "relative entries are ignored")
+        XCTAssertTrue(dirs.allSatisfy { $0.hasPrefix("/") }, "every watched dir is absolute")
+    }
+
+    func testWatchDirsExcludeAnOverridesDirReachedViaASymlink() throws {
+        // A --applications passed as a symlinked alias of a real applications dir must still
+        // be excluded — resolvingSymlinksInPath canonicalizes both sides of the comparison.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pict-watch-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let realShare = root.appendingPathComponent("share", isDirectory: true)
+        let realApps = realShare.appendingPathComponent("applications", isDirectory: true)
+        try FileManager.default.createDirectory(at: realApps, withIntermediateDirectories: true)
+        let aliasShare = root.appendingPathComponent("alias", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: aliasShare, withDestinationURL: realShare)
+
+        let env = ["XDG_DATA_HOME": realShare.path, "XDG_DATA_DIRS": "/usr/share"]
+        let dirs = SyncOverridesCommand.applicationDirectoriesToWatch(
+            environment: env,
+            excluding: aliasShare.appendingPathComponent("applications", isDirectory: true))
+            .map { $0.resolvingSymlinksInPath().path }
+        XCTAssertFalse(dirs.contains(realApps.resolvingSymlinksInPath().path),
+                       "the write target reached via a symlink is still excluded")
+        XCTAssertTrue(dirs.contains("/usr/share/applications"))
     }
 
     func testWatchDirsExcludeTheOverridesDirEvenWhenItIsXDGDataHome() {

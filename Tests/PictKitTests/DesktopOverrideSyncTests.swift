@@ -30,14 +30,18 @@ final class DesktopOverrideSyncTests: XCTestCase {
         }
     }
 
+    /// A 64×64 opaque-blue (premultiplied) fixture image, shared by the store fixtures.
+    private func makeOpaqueBlueImage() throws -> PixelImage {
+        var samples = [UInt8]()
+        for _ in 0..<(64 * 64) { samples += [0, 0, 200, 255] }
+        return try XCTUnwrap(PixelImage(width: 64, height: 64, samples: samples))
+    }
+
     /// A store holding one entry keyed to the fake system `.desktop`.
     private func makeStoreWithFirefoxEntry() throws -> (IconStore, IconTarget) {
         let store = IconStore(directory: storeDir)
         let target = IconTarget.application(bundleURL: systemDesktop, bundleIdentifier: nil)
-        var samples = [UInt8]()
-        for _ in 0..<(64 * 64) { samples += [0, 0, 200, 255] }   // opaque blue, premultiplied
-        let image = try XCTUnwrap(PixelImage(width: 64, height: 64, samples: samples))
-        guard case .success = store.setIcon(image, for: target) else {
+        guard case .success = store.setIcon(try makeOpaqueBlueImage(), for: target) else {
             XCTFail("store write failed")
             throw StoreWriteFailed()
         }
@@ -120,7 +124,8 @@ final class DesktopOverrideSyncTests: XCTestCase {
 
         // And removing the entry must not reap it either — it was never ours to delete.
         store.clear(for: target)
-        _ = sync.sync()
+        let reap = sync.sync()
+        XCTAssertEqual(reap.removed, 0, "an unmarked file at our id is never reaped")
         XCTAssertEqual(try String(contentsOf: override, encoding: .utf8), handContent,
                        "an unmarked file at our id is never reaped")
     }
@@ -159,9 +164,7 @@ final class DesktopOverrideSyncTests: XCTestCase {
         try "[Desktop Entry]\nName=Alpha\nIcon=alpha\n".write(to: fileA, atomically: true, encoding: .utf8)
         try "[Desktop Entry]\nName=Beta\nIcon=beta\n".write(to: fileB, atomically: true, encoding: .utf8)
 
-        var samples = [UInt8]()
-        for _ in 0..<(64 * 64) { samples += [0, 0, 200, 255] }
-        let image = try XCTUnwrap(PixelImage(width: 64, height: 64, samples: samples))
+        let image = try makeOpaqueBlueImage()
         for url in [fileA, fileB] {
             let target = IconTarget.application(bundleURL: url, bundleIdentifier: nil)
             guard case .success = store.setIcon(image, for: target) else {
@@ -171,7 +174,9 @@ final class DesktopOverrideSyncTests: XCTestCase {
 
         let sync = DesktopOverrideSync(store: store, overridesDirectory: overridesDir)
         let overrideFoo = overridesDir.appendingPathComponent("foo.desktop")
-        _ = sync.sync()
+        let first = sync.sync()
+        XCTAssertEqual(first.written, 1, "two colliding ids still write exactly one override")
+        XCTAssertEqual(first.skipped, 1, "the losing collider is skipped")
         XCTAssertTrue(try String(contentsOf: overrideFoo, encoding: .utf8).contains("Name=Alpha"),
                       "the lowest system path wins")
         // Deterministic winner ⇒ the re-sync sees identical content and doesn't flap it.
