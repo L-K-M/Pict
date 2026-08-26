@@ -35,7 +35,10 @@ struct SyncOverridesCommand: ParsableCommand {
         print("Synced overrides: \(summary.written) written, \(summary.removed) removed, \(summary.skipped) skipped.")
 
         if watch {
-            runWatch(store: store, sync: sync)   // never returns
+            // Never watch the directory we write into — that would loop on our own writes —
+            // so hand runWatch the resolved overrides dir (the passed one, or the default).
+            runWatch(store: store, sync: sync,
+                     overridesDirectory: overrides ?? DesktopOverrideSync.defaultOverridesDirectory())   // never returns
         }
         #else
         throw RuntimeError("sync-overrides applies freedesktop .desktop overrides and is available on Linux only.")
@@ -43,12 +46,13 @@ struct SyncOverridesCommand: ParsableCommand {
     }
 
     #if os(Linux)
-    /// Re-syncs whenever the store or a system applications directory changes, then blocks
-    /// forever running the main queue the watchers deliver on. The store watch picks up
-    /// `pict set`/`remove`; the system-dir watches pick up an app being installed or
-    /// updated (so the override is regenerated from the new system entry). The override
-    /// directory itself is deliberately not watched — that would loop on our own writes.
-    private func runWatch(store: IconStore, sync: DesktopOverrideSync) -> Never {
+    /// Re-syncs whenever the store or an applications directory changes, then blocks forever
+    /// running the main queue the watchers deliver on. The store watch picks up `pict
+    /// set`/`remove`; the applications-dir watches pick up an app being installed or updated
+    /// (so the override is regenerated from the new system entry). The overrides directory is
+    /// excluded from the watch set — watching what we write into would loop on our own writes.
+    private func runWatch(store: IconStore, sync: DesktopOverrideSync,
+                          overridesDirectory: URL) -> Never {
         func resync() {
             let s = sync.sync()
             FileHandle.standardError.write(Data(
@@ -60,7 +64,8 @@ struct SyncOverridesCommand: ParsableCommand {
         storeWatcher.start()
         watchers.append(storeWatcher)
 
-        for directory in Self.systemApplicationDirectories() {
+        for directory in Self.applicationDirectoriesToWatch(
+            environment: ProcessInfo.processInfo.environment, excluding: overridesDirectory) {
             let watcher = IconStoreWatcher(directory: directory) { resync() }
             watcher.start()
             watchers.append(watcher)
@@ -74,16 +79,32 @@ struct SyncOverridesCommand: ParsableCommand {
         withExtendedLifetime(watchers) { dispatchMain() }
     }
 
-    /// The system applications directories to watch: each `$XDG_DATA_DIRS/applications`
-    /// (defaulting to the spec's `/usr/local/share:/usr/share`).
-    private static func systemApplicationDirectories() -> [URL] {
-        let raw = ProcessInfo.processInfo.environment["XDG_DATA_DIRS"]
-        let dirs = (raw?.isEmpty == false ? raw! : "/usr/local/share:/usr/share")
-            .split(separator: ":").map(String.init)
-            // The freedesktop base-dir spec says relative $XDG_DATA_DIRS entries are invalid
-            // and must be ignored; watching one would resolve against an arbitrary cwd.
-            .filter { $0.hasPrefix("/") }
-        return dirs.map { URL(fileURLWithPath: $0, isDirectory: true).appendingPathComponent("applications", isDirectory: true) }
+    /// The applications directories to watch: `$XDG_DATA_HOME/applications` (where user-scope
+    /// installs — Flatpak `--user`, `~/.local`-prefixed installs — put their entries) plus
+    /// each `$XDG_DATA_DIRS/applications` (defaulting to the spec's `/usr/local/share:/usr/share`),
+    /// deduplicated and minus the overrides directory we write into. Pure in its inputs so it
+    /// can be unit-tested without touching the process environment.
+    static func applicationDirectoriesToWatch(environment: [String: String],
+                                              excluding overrides: URL) -> [URL] {
+        // Relative $XDG_DATA_HOME/$XDG_DATA_DIRS entries are invalid per the freedesktop
+        // base-dir spec and must be ignored; watching one would resolve against an arbitrary cwd.
+        let dataHome = environment["XDG_DATA_HOME"].flatMap { $0.hasPrefix("/") ? $0 : nil }
+            ?? NSHomeDirectory() + "/.local/share"
+        let dataDirs = environment["XDG_DATA_DIRS"].flatMap { $0.isEmpty ? nil : $0 }
+            ?? "/usr/local/share:/usr/share"
+        let roots = [dataHome] + dataDirs.split(separator: ":").map(String.init).filter { $0.hasPrefix("/") }
+
+        let overridesPath = overrides.standardizedFileURL.path
+        var seen = Set<String>()
+        var result: [URL] = []
+        for root in roots {
+            let url = URL(fileURLWithPath: root, isDirectory: true)
+                .appendingPathComponent("applications", isDirectory: true)
+            let path = url.standardizedFileURL.path
+            if path == overridesPath { continue }     // never watch our own write target
+            if seen.insert(path).inserted { result.append(url) }
+        }
+        return result
     }
     #endif
 }

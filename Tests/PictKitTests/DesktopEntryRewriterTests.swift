@@ -62,11 +62,24 @@ final class DesktopEntryRewriterTests: XCTestCase {
         XCTAssertTrue(mainGroup.contains("X-Pict-Managed=true"), out)
     }
 
-    func testLocalizedIconIsNotTouched() {
-        let input = "[Desktop Entry]\nIcon=app\nIcon[de]=app-de\n"
+    func testLocalizedIconKeysAreDroppedSoTheManagedIconWins() {
+        // `Icon` is a spec localestring, so a localized `Icon[de]=` would take precedence
+        // over our managed plain `Icon=` in a German locale and keep showing the old icon.
+        // The override is a fresh copy (the system entry is untouched), so it's dropped.
+        let input = "[Desktop Entry]\nIcon=app\nIcon[de]=app-de\nName=App\n"
         let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/app.png")
         XCTAssertTrue(out.contains("Icon=/store/app.png"), out)   // plain Icon replaced
-        XCTAssertTrue(out.contains("Icon[de]=app-de"), out)       // localized left as-is
+        XCTAssertFalse(out.contains("Icon[de]="), out)            // localized dropped, can't shadow
+        XCTAssertTrue(out.contains("Name=App"), out)              // other keys untouched
+    }
+
+    func testAnIconPathWithALineBreakLeavesTheInputUnchanged() {
+        // A newline in the icon path would inject an extra key line into the override; the
+        // rewriter refuses (returns the input unchanged, which the sync then skips).
+        let input = "[Desktop Entry]\nName=App\nIcon=app\n"
+        let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/a.png\nHidden=true")
+        XCTAssertEqual(out, input, "a line break in the icon path must not build an override")
+        XCTAssertFalse(DesktopEntryRewriter.isManaged(out), out)  // so the sync skips it
     }
 
     func testWithoutDesktopEntryGroupReturnsInputUnchanged() {
@@ -107,6 +120,7 @@ final class DesktopEntryRewriterTests: XCTestCase {
         let out = DesktopEntryRewriter.rewrite(input, iconPath: "/store/b.png")
         XCTAssertTrue(out.contains("Icon=/store/b.png"), out)
         XCTAssertTrue(out.contains("Name=B"), out)
+        XCTAssertFalse(out.hasPrefix("\u{FEFF}"), "the BOM is intentionally dropped, not carried through")
         XCTAssertTrue(DesktopEntryRewriter.isManaged(out), out)
     }
 

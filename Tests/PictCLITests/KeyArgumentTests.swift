@@ -157,6 +157,39 @@ final class KeyArgumentTests: XCTestCase {
         }
     }
 
+    // MARK: sync-overrides watch directories (Linux)
+
+    #if os(Linux)
+    func testWatchDirsIncludeXDGDataHomeDedupeAndExcludeTheOverridesDir() {
+        let env = ["XDG_DATA_HOME": "/home/u/.local/share",
+                   "XDG_DATA_DIRS": "/usr/share:/usr/share:relative/dir"]   // dup + one relative
+        let overrides = URL(fileURLWithPath: "/custom/apps", isDirectory: true)
+        let dirs = SyncOverridesCommand
+            .applicationDirectoriesToWatch(environment: env, excluding: overrides)
+            .map(\.standardizedFileURL.path)
+
+        XCTAssertTrue(dirs.contains("/home/u/.local/share/applications"),
+                      "XDG_DATA_HOME/applications is watched for user-scope installs")
+        XCTAssertEqual(dirs.filter { $0 == "/usr/share/applications" }.count, 1,
+                       "duplicate XDG_DATA_DIRS entries collapse to one watcher")
+        XCTAssertFalse(dirs.contains("relative/applications"), "relative entries are ignored")
+    }
+
+    func testWatchDirsExcludeTheOverridesDirEvenWhenItIsXDGDataHome() {
+        // The default overrides dir IS $XDG_DATA_HOME/applications — watching it would loop
+        // on our own writes, so it must be dropped from the watch set.
+        let env = ["XDG_DATA_HOME": "/home/u/.local/share", "XDG_DATA_DIRS": "/usr/share"]
+        let overrides = URL(fileURLWithPath: "/home/u/.local/share/applications", isDirectory: true)
+        let dirs = SyncOverridesCommand
+            .applicationDirectoriesToWatch(environment: env, excluding: overrides)
+            .map(\.standardizedFileURL.path)
+
+        XCTAssertFalse(dirs.contains("/home/u/.local/share/applications"),
+                       "the directory we write into is never watched")
+        XCTAssertTrue(dirs.contains("/usr/share/applications"))
+    }
+    #endif
+
     // MARK: Helper
 
     private func key(_ argument: String) throws -> IconEntryKey {

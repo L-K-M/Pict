@@ -46,8 +46,9 @@ public struct DesktopOverrideSync {
         public var written: Int
         /// Stale Pict-managed overrides removed.
         public var removed: Int
-        /// Desktop-keyed entries skipped because their system entry is gone or they carry
-        /// no image.
+        /// Desktop-keyed entries skipped: no image, a missing / unreadable / corrupt system
+        /// entry, a desktop-file-id collision lost to another entry, or a refused or failed
+        /// write (a hand-authored file at our id, or an I/O error).
         public var skipped: Int
 
         public init(written: Int = 0, removed: Int = 0, skipped: Int = 0) {
@@ -64,8 +65,13 @@ public struct DesktopOverrideSync {
         var summary = Summary()
         try? fileManager.createDirectory(at: overridesDirectory, withIntermediateDirectories: true)
 
-        var wanted = Set<String>()         // absolute paths of overrides we (re)generated
-        var claimed: [String: String] = [:]   // override filename → the system path that owns it
+        // First pass: resolve, for each override id, the winning (system path, content).
+        // Two entries can resolve to the same id, and the store is a dictionary — iteration
+        // order is randomized per process. Deciding the winner up front (lowest system path)
+        // and writing only in the second pass makes both the result and the mtime stable
+        // across syncs; writing as we go would let the loser write and the winner overwrite
+        // within one sync, churning the file whenever the loser was iterated first.
+        var winners: [String: (systemPath: String, content: String)] = [:]
         for (key, entry) in store.entries where isDesktopKey(key) {
             guard entry.origin.needsImage, let image = entry.image else { summary.skipped += 1; continue }
             let systemPath = key.value
@@ -78,20 +84,26 @@ public struct DesktopOverrideSync {
             let iconPath = store.entriesDirectory.appendingPathComponent(image)
                 .standardizedFileURL.path
             let newContent = DesktopEntryRewriter.rewrite(systemText, iconPath: iconPath)
-            // A system entry we couldn't rewrite (no [Desktop Entry] group — corrupt, empty)
-            // must not be written unmarked, since it could never be reaped. Skip it, and
-            // don't claim its override path — so a stale one there is still reaped.
+            // A system entry we couldn't rewrite (no [Desktop Entry] group — corrupt, empty,
+            // or an icon path with a line break) must not be written unmarked, since it could
+            // never be reaped. Skip it, and don't claim its id — so a stale one is still reaped.
             guard DesktopEntryRewriter.isManaged(newContent) else { summary.skipped += 1; continue }
 
             let overrideName = overrideFilename(forSystemPath: systemPath)
-            // Two entries resolving to the same override id would fight over one file and
-            // flap by dictionary-iteration order; the first to claim the name wins.
-            if let owner = claimed[overrideName], owner != systemPath { summary.skipped += 1; continue }
-            claimed[overrideName] = systemPath
+            if let existing = winners[overrideName] {
+                if systemPath < existing.systemPath { winners[overrideName] = (systemPath, newContent) }
+                summary.skipped += 1   // exactly one of the colliders loses its own override
+            } else {
+                winners[overrideName] = (systemPath, newContent)
+            }
+        }
 
+        // Second pass: write each id's winner once.
+        var wanted = Set<String>()         // absolute paths of overrides we (re)generated
+        for (overrideName, winner) in winners {
             let overrideURL = overridesDirectory.appendingPathComponent(overrideName)
             wanted.insert(overrideURL.standardizedFileURL.path)
-            switch writeIfChanged(newContent, to: overrideURL) {
+            switch writeIfChanged(winner.content, to: overrideURL) {
             case .written: summary.written += 1
             // A refusal (a hand-authored file at our id) or an I/O failure means the entry
             // wasn't applied — count it as skipped so the summary isn't a misleading "0/0/0".

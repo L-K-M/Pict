@@ -200,7 +200,13 @@ final class PictCLIIntegrationTests: XCTestCase {
         XCTAssertTrue(content.contains("Exec=firefox %u"), content)
         XCTAssertTrue(content.contains("X-Pict-Managed=true"), content)
         XCTAssertFalse(content.contains("Icon=firefox\n"), content)
-        XCTAssertTrue(content.contains(".png"), content)
+        // The Icon points at an absolute path inside the store we passed — not a stray .png.
+        XCTAssertTrue(content.contains("Icon=\(storeDirectory.path)"), content)
+        // The most destructive failure mode is mutating the system entry in place: pin that
+        // the original under usr/share/ is byte-for-byte untouched.
+        XCTAssertEqual(try String(contentsOf: systemDesktop, encoding: .utf8),
+                       "[Desktop Entry]\nName=Firefox\nExec=firefox %u\nIcon=firefox\n",
+                       "the system entry is only read, never written")
 
         // remove + sync → the now-stale, Pict-managed override is reaped.
         XCTAssertEqual(try runPict("remove", "--store", storeDirectory.path, key).status, 0)
@@ -237,6 +243,9 @@ final class PictCLIIntegrationTests: XCTestCase {
                                    "--applications", appsDir.path).status, 0)
         XCTAssertEqual(try String(contentsOf: override, encoding: .utf8), handContent,
                        "an unmarked file at our id is left untouched")
+        XCTAssertEqual(try String(contentsOf: systemDesktop, encoding: .utf8),
+                       "[Desktop Entry]\nName=Firefox\nExec=firefox %u\nIcon=firefox\n",
+                       "the system entry is never modified in place")
 
         // …and removing the entry must not reap it either — it was never ours to delete.
         XCTAssertEqual(try runPict("remove", "--store", storeDirectory.path, key).status, 0)

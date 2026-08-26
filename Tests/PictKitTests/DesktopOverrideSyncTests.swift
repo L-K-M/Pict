@@ -65,7 +65,10 @@ final class DesktopOverrideSyncTests: XCTestCase {
         let (store, _) = try makeStoreWithFirefoxEntry()
         let sync = DesktopOverrideSync(store: store, overridesDirectory: overridesDir)
         XCTAssertEqual(sync.sync().written, 1)
-        XCTAssertEqual(sync.sync().written, 0, "an unchanged override is not rewritten")
+        let resync = sync.sync()
+        XCTAssertEqual(resync.written, 0, "an unchanged override is not rewritten")
+        XCTAssertEqual(resync.removed, 0, "an unchanged override is not reaped either")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: override.path), "still on disk")
     }
 
     func testRemovingTheEntryRemovesTheOverride() throws {
@@ -140,6 +143,41 @@ final class DesktopOverrideSyncTests: XCTestCase {
         XCTAssertTrue(content.contains("Name=Firefox ESR"), content)
         XCTAssertTrue(content.contains("Exec=firefox-esr %u"), content)
         XCTAssertTrue(content.contains("X-Pict-Managed=true"), content)
+    }
+
+    func testCollidingDesktopIDsPickTheLowestPathDeterministically() throws {
+        // Two system entries under different roots whose override id both resolve to
+        // "foo.desktop". The store is a dictionary (random iteration order per process), so
+        // the winner must be pinned to the lowest system path, not to iteration order.
+        let store = IconStore(directory: storeDir)
+        let rootA = root.appendingPathComponent("a/applications", isDirectory: true)
+        let rootB = root.appendingPathComponent("b/applications", isDirectory: true)
+        try FileManager.default.createDirectory(at: rootA, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: rootB, withIntermediateDirectories: true)
+        let fileA = rootA.appendingPathComponent("foo.desktop")   // lower path → always wins
+        let fileB = rootB.appendingPathComponent("foo.desktop")
+        try "[Desktop Entry]\nName=Alpha\nIcon=alpha\n".write(to: fileA, atomically: true, encoding: .utf8)
+        try "[Desktop Entry]\nName=Beta\nIcon=beta\n".write(to: fileB, atomically: true, encoding: .utf8)
+
+        var samples = [UInt8]()
+        for _ in 0..<(64 * 64) { samples += [0, 0, 200, 255] }
+        let image = try XCTUnwrap(PixelImage(width: 64, height: 64, samples: samples))
+        for url in [fileA, fileB] {
+            let target = IconTarget.application(bundleURL: url, bundleIdentifier: nil)
+            guard case .success = store.setIcon(image, for: target) else {
+                XCTFail("store write failed"); throw StoreWriteFailed()
+            }
+        }
+
+        let sync = DesktopOverrideSync(store: store, overridesDirectory: overridesDir)
+        let overrideFoo = overridesDir.appendingPathComponent("foo.desktop")
+        _ = sync.sync()
+        XCTAssertTrue(try String(contentsOf: overrideFoo, encoding: .utf8).contains("Name=Alpha"),
+                      "the lowest system path wins")
+        // Deterministic winner ⇒ the re-sync sees identical content and doesn't flap it.
+        let again = sync.sync()
+        XCTAssertEqual(again.written, 0, "no churn: the winner doesn't change across syncs")
+        XCTAssertTrue(try String(contentsOf: overrideFoo, encoding: .utf8).contains("Name=Alpha"))
     }
 
     func testAnUnreadableNonUTF8OverrideIsNeverOverwritten() throws {

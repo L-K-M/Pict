@@ -6,18 +6,14 @@ import Foundation
 ///
 /// It is deliberately a **line-level** edit, not a parse-and-reserialize: the plan's rule
 /// is "the current system entry with only `Icon=` replaced", so every other line — order,
-/// comments, blank lines, other groups, localized keys — is preserved byte for byte.
-/// Only the plain `Icon=` (no `[locale]` suffix) in the `[Desktop Entry]` group is
-/// touched, and an `X-Pict-Managed=true` marker is ensured so the sync can tell its own
-/// overrides from files it must never delete.
-///
-/// **Known limitation (by the plan's design):** a locale-suffixed `Icon[xx]=` key is left
-/// as-is. Per the freedesktop spec a matching localized key overrides the plain `Icon=` in
-/// that locale, so on a system entry that ships an `Icon[xx]=` the override will keep the
-/// original icon for users in locale `xx`. Localized `Icon` keys are vanishingly rare (an
-/// icon is normally locale-independent — it's `Name`/`Comment` that get localized), and
-/// replacing them would deviate from "only `Icon=` replaced"; the plain-`Icon=`-only edit
-/// is the deliberate choice.
+/// comments, blank lines, other groups, localized `Name`/`Comment` keys — is preserved
+/// byte for byte. The `[Desktop Entry]` group's plain `Icon=` is set to the store icon, an
+/// `X-Pict-Managed=true` marker is ensured so the sync can tell its own overrides from
+/// files it must never delete, and — because `Icon` is a spec *localestring* — any
+/// localized `Icon[xx]=` is dropped: leaving one would let it shadow our managed icon in
+/// its locale (GLib resolves a matching localized key ahead of the plain one), silently
+/// defeating the override. The originals stay in the untouched system entry, so dropping
+/// them from our fresh copy is safe.
 ///
 /// Pure and platform-neutral so it can be unit-tested on both CIs; `DesktopOverrideSync`,
 /// which drives it against the filesystem, is Linux-only.
@@ -42,6 +38,10 @@ public enum DesktopEntryRewriter {
     /// unchanged if it has no `[Desktop Entry]` group.
     public static func rewrite(_ content: String, iconPath: String) -> String {
         guard content.range(of: "[Desktop Entry]") != nil else { return content }
+        // A line break inside the icon path would inject extra key lines into the generated
+        // override (e.g. a second `Hidden=true` line), so refuse to build one — leave the
+        // input unchanged, which `DesktopOverrideSync` then skips as unmarkable.
+        guard !iconPath.contains("\n"), !iconPath.contains("\r") else { return content }
 
         // Preserve the file's line terminator (LF or CRLF) on the way out.
         let separator = content.contains("\r\n") ? "\r\n" : "\n"
@@ -85,6 +85,12 @@ public enum DesktopEntryRewriter {
             }
             if inTarget, let key = exactKey(of: trimmed) {
                 if key == "Icon" { out.append("Icon=\(iconPath)"); iconDone = true; continue }
+                // `Icon` is a localestring, so a localized `Icon[xx]=` would take precedence
+                // over our managed plain `Icon=` in matching locales and keep showing the old
+                // icon there. This override is a fresh Pict-owned copy (the system entry is
+                // untouched), so drop the localized duplicates and let the store icon win in
+                // every locale.
+                if key.hasPrefix("Icon[") { continue }
                 if key == managedKey {
                     out.append("\(managedKey)=\(managedValue)"); managedDone = true; continue
                 }
