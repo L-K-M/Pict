@@ -171,6 +171,45 @@ final class PictCLIIntegrationTests: XCTestCase {
                         .hasPrefix(NSHomeDirectory()), result.stdout)
     }
 
+    // MARK: sync-overrides (Linux)
+
+    #if os(Linux)
+    func testSyncOverridesGeneratesAndReapsADesktopOverride() throws {
+        let png = try fixturePNG()
+        let testRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pict-sync-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: testRoot) }
+
+        let systemApps = testRoot.appendingPathComponent("usr/share/applications", isDirectory: true)
+        try FileManager.default.createDirectory(at: systemApps, withIntermediateDirectories: true)
+        let systemDesktop = systemApps.appendingPathComponent("firefox.desktop")
+        try "[Desktop Entry]\nName=Firefox\nExec=firefox %u\nIcon=firefox\n"
+            .write(to: systemDesktop, atomically: true, encoding: .utf8)
+        let appsDir = testRoot.appendingPathComponent("applications", isDirectory: true)
+        let override = appsDir.appendingPathComponent("firefox.desktop")
+        let key = "app:\(systemDesktop.path)"
+
+        // set → the store holds an entry keyed to the system .desktop.
+        XCTAssertEqual(try runPict("set", "--store", storeDirectory.path, key, png.path).status, 0)
+
+        // sync-overrides → the shadowing override appears, system entry with only Icon= swapped.
+        let sync = try runPict("sync-overrides", "--store", storeDirectory.path, "--applications", appsDir.path)
+        XCTAssertEqual(sync.status, 0, sync.stderr)
+        let content = try String(contentsOf: override, encoding: .utf8)
+        XCTAssertTrue(content.contains("Name=Firefox"), content)
+        XCTAssertTrue(content.contains("Exec=firefox %u"), content)
+        XCTAssertTrue(content.contains("X-Pict-Managed=true"), content)
+        XCTAssertFalse(content.contains("Icon=firefox\n"), content)
+        XCTAssertTrue(content.contains(".png"), content)
+
+        // remove + sync → the now-stale, Pict-managed override is reaped.
+        XCTAssertEqual(try runPict("remove", "--store", storeDirectory.path, key).status, 0)
+        XCTAssertEqual(try runPict("sync-overrides", "--store", storeDirectory.path,
+                                   "--applications", appsDir.path).status, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: override.path), "stale override reaped")
+    }
+    #endif
+
     // MARK: The shared location honors XDG_DATA_HOME on Linux
 
     #if os(Linux)

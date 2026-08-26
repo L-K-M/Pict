@@ -15,7 +15,8 @@ struct PictCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "pict",
         abstract: "Read and write the shared Pict icon store.",
-        subcommands: [List.self, Get.self, SetCommand.self, Remove.self, PathCommand.self]
+        subcommands: [List.self, Get.self, SetCommand.self, Remove.self, PathCommand.self,
+                      SyncOverridesCommand.self]
     )
 }
 
