@@ -171,6 +171,91 @@ final class PictCLIIntegrationTests: XCTestCase {
                         .hasPrefix(NSHomeDirectory()), result.stdout)
     }
 
+    // MARK: sync-overrides (Linux)
+
+    #if os(Linux)
+    func testSyncOverridesGeneratesAndReapsADesktopOverride() throws {
+        let png = try fixturePNG()
+        let testRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pict-sync-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: testRoot) }
+
+        let systemApps = testRoot.appendingPathComponent("usr/share/applications", isDirectory: true)
+        try FileManager.default.createDirectory(at: systemApps, withIntermediateDirectories: true)
+        let systemDesktop = systemApps.appendingPathComponent("firefox.desktop")
+        try "[Desktop Entry]\nName=Firefox\nExec=firefox %u\nIcon=firefox\n"
+            .write(to: systemDesktop, atomically: true, encoding: .utf8)
+        let appsDir = testRoot.appendingPathComponent("applications", isDirectory: true)
+        let override = appsDir.appendingPathComponent("firefox.desktop")
+        let key = "app:\(systemDesktop.path)"
+
+        // set → the store holds an entry keyed to the system .desktop.
+        XCTAssertEqual(try runPict("set", "--store", storeDirectory.path, key, png.path).status, 0)
+
+        // sync-overrides → the shadowing override appears, system entry with only Icon= swapped.
+        let sync = try runPict("sync-overrides", "--store", storeDirectory.path, "--applications", appsDir.path)
+        XCTAssertEqual(sync.status, 0, sync.stderr)
+        let content = try String(contentsOf: override, encoding: .utf8)
+        XCTAssertTrue(content.contains("Name=Firefox"), content)
+        XCTAssertTrue(content.contains("Exec=firefox %u"), content)
+        XCTAssertTrue(content.contains("X-Pict-Managed=true"), content)
+        XCTAssertFalse(content.contains("Icon=firefox\n"), content)
+        // The Icon points at an absolute path inside the store we passed — not a stray .png.
+        XCTAssertTrue(content.contains("Icon=\(storeDirectory.path)"), content)
+        // The most destructive failure mode is mutating the system entry in place: pin that
+        // the original under usr/share/ is byte-for-byte untouched.
+        XCTAssertEqual(try String(contentsOf: systemDesktop, encoding: .utf8),
+                       "[Desktop Entry]\nName=Firefox\nExec=firefox %u\nIcon=firefox\n",
+                       "the system entry is only read, never written")
+
+        // remove + sync → the now-stale, Pict-managed override is reaped.
+        XCTAssertEqual(try runPict("remove", "--store", storeDirectory.path, key).status, 0)
+        XCTAssertEqual(try runPict("sync-overrides", "--store", storeDirectory.path,
+                                   "--applications", appsDir.path).status, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: override.path), "stale override reaped")
+    }
+
+    func testSyncOverridesNeverClobbersOrReapsAHandAuthoredFile() throws {
+        let png = try fixturePNG()
+        let testRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pict-sync-hand-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: testRoot) }
+
+        let systemApps = testRoot.appendingPathComponent("usr/share/applications", isDirectory: true)
+        try FileManager.default.createDirectory(at: systemApps, withIntermediateDirectories: true)
+        let systemDesktop = systemApps.appendingPathComponent("firefox.desktop")
+        try "[Desktop Entry]\nName=Firefox\nExec=firefox %u\nIcon=firefox\n"
+            .write(to: systemDesktop, atomically: true, encoding: .utf8)
+        let key = "app:\(systemDesktop.path)"
+
+        // A user's own override already sits at the exact id our entry resolves to, with no
+        // X-Pict-Managed marker.
+        let appsDir = testRoot.appendingPathComponent("applications", isDirectory: true)
+        try FileManager.default.createDirectory(at: appsDir, withIntermediateDirectories: true)
+        let override = appsDir.appendingPathComponent("firefox.desktop")
+        let handContent = "[Desktop Entry]\nName=My Firefox\nIcon=my-firefox\n"
+        try handContent.write(to: override, atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(try runPict("set", "--store", storeDirectory.path, key, png.path).status, 0)
+
+        // sync must not overwrite the unmarked file it found at that id.
+        XCTAssertEqual(try runPict("sync-overrides", "--store", storeDirectory.path,
+                                   "--applications", appsDir.path).status, 0)
+        XCTAssertEqual(try String(contentsOf: override, encoding: .utf8), handContent,
+                       "an unmarked file at our id is left untouched")
+        XCTAssertEqual(try String(contentsOf: systemDesktop, encoding: .utf8),
+                       "[Desktop Entry]\nName=Firefox\nExec=firefox %u\nIcon=firefox\n",
+                       "the system entry is never modified in place")
+
+        // …and removing the entry must not reap it either — it was never ours to delete.
+        XCTAssertEqual(try runPict("remove", "--store", storeDirectory.path, key).status, 0)
+        XCTAssertEqual(try runPict("sync-overrides", "--store", storeDirectory.path,
+                                   "--applications", appsDir.path).status, 0)
+        XCTAssertEqual(try String(contentsOf: override, encoding: .utf8), handContent,
+                       "an unmarked file at our id is never reaped")
+    }
+    #endif
+
     // MARK: The shared location honors XDG_DATA_HOME on Linux
 
     #if os(Linux)
