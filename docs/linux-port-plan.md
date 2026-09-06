@@ -22,5 +22,44 @@ The plan items that land here, in order:
 | LP-32 | Debian packaging for `pict` |
 | LP-33–36 | The GTK editor app: shell, SVG ingestion + local sets, remote sets + Iconify, WebKitGTK web picker |
 
-Background for every choice: this repo's [`linux-port.md`](linux-port.md) (the
-Pict-specific research) and the TopDrawer repo's `docs/linux-port/` research set.
+## The Jetty port's items
+
+[Jetty](https://github.com/L-K-M/Jetty) — the third app that reads this store — is
+being ported to Ubuntu too, under its own plan
+([Jetty's `docs/linux-port-plan.md`](https://github.com/L-K-M/Jetty/blob/main/docs/linux-port-plan.md),
+items `JP-01`…`JP-35`). Two of those items land **here**: JP-12 because a second
+consumer clears `AGENTS.md`'s bar for putting it in `PictKit`, and JP-13 because it
+*is* LP-24a above — already planned to land here — for which Jetty is simply a second
+reason:
+
+| Item | What lands in Pict |
+|---|---|
+| JP-12 | `DesktopEntry` parser + `DesktopEntryIndex` in `Sources/PictKit/Store/` — the spec-correct read of `.desktop` files (XDG + snap + Flatpak dirs, ID dedupe, `NoDisplay`/`OnlyShowIn`/`TryExec`, the locale ladder, `Exec` field codes) |
+| JP-13 | `ArtworkProviding` via icon-theme lookup — the same work as **LP-24a**. Jetty's reason: rung 4 of its icon ladder is `NSWorkspace.icon(forFile:)`, whose Linux analogue is exactly this lookup |
+
+JP-12 has three consumers, which is what earns it a place in the library: Jetty's dock
+items and command bar, TopDrawer's LP-19 (see the sequencing note below), and this
+repo's own `DesktopOverrideSync`, which can then drop the best-effort desktop-ID guess
+in its private `overrideFilename(forSystemPath:)`.
+
+**Where these sit in the order.** They are sequenced by Jetty's plan, not interleaved
+into the LP table above: both are in its Part 3, after the `JettyCore` extraction
+(JP-01…JP-11) and before the Linux daemon needs them (JP-20 consumes JP-12; JP-21
+consumes JP-13). Relative to the LP list, JP-13 *is* LP-24a and inherits its slot;
+JP-12 is new scope with no LP number, and deliberately so — the LP sequence is the
+TopDrawer port's, and giving this a number in it (LP-24b is already TopDrawer's
+icon-ladder PR) would collide. Whichever plan reaches Part 3 first should land JP-12;
+the other then depends on it rather than writing a private copy. When JP-12 lands,
+revisit TopDrawer's LP-19 so it consumes the shared parser instead of the private
+copy it currently schedules.
+
+Keep JP-12 small — an entry value type, an index, and a lookup. No preferences, no
+UI, no launching: it is a public surface and therefore a compatibility commitment
+across three release cadences.
+
+## Background
+
+Every choice here draws on three research sets: this repo's [`linux-port.md`](linux-port.md) (the
+Pict-specific research), Jetty's
+[`docs/linux-port.md`](https://github.com/L-K-M/Jetty/blob/main/docs/linux-port.md),
+and the TopDrawer repo's `docs/linux-port/` research set.
