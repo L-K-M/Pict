@@ -35,6 +35,15 @@ consumer clears `AGENTS.md`'s bar for putting something in `PictKit`:
 | JP-12 | `DesktopEntry` parser + `DesktopEntryIndex` in `Sources/PictKit/Store/` — the spec-correct read of `.desktop` files (XDG + snap + Flatpak dirs, ID dedupe, `NoDisplay`/`OnlyShowIn`/`TryExec`, the locale ladder, `Exec` field codes). Jetty needs it for its dock items and command bar, TopDrawer's LP-19 currently plans a private copy, and it retires `DesktopOverrideSync.overrideFilename(forSystemPath:)`'s documented best-effort desktop-ID guess |
 | JP-13 | The same work as **LP-24a** above (`ArtworkProviding` via icon-theme lookup). Jetty is a second reason to land it: rung 4 of its icon ladder is `NSWorkspace.icon(forFile:)`, whose Linux analogue is exactly this lookup |
 
+**Where these sit in the order.** They are sequenced by Jetty's plan, not interleaved
+into the LP table above: both are in its Part 3, after the `JettyCore` extraction
+(JP-01…JP-11) and before the Linux daemon needs them (JP-20 consumes JP-12; JP-21
+consumes JP-13). Relative to the LP list, JP-13 *is* LP-24a and inherits its slot;
+JP-12 is new scope with no LP number, and deliberately so — the LP sequence is the
+Top Drawer port's, and giving this a number in it (LP-24b is already TopDrawer's
+icon-ladder PR) would collide. Whichever plan reaches Part 3 first should land JP-12;
+the other then depends on it rather than writing a private copy.
+
 Keep JP-12 small — an entry value type, an index, and a lookup. No preferences, no
 UI, no launching: it is a public surface and therefore a compatibility commitment
 across three release cadences.
