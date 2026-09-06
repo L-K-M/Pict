@@ -26,7 +26,7 @@ The plan items that land here, in order:
 
 [Jetty](https://github.com/L-K-M/Jetty) — the third app that reads this store — is
 being ported to Ubuntu too, under its own plan
-([`docs/linux-port-plan.md`](https://github.com/L-K-M/Jetty/blob/main/docs/linux-port-plan.md),
+([Jetty's `docs/linux-port-plan.md`](https://github.com/L-K-M/Jetty/blob/main/docs/linux-port-plan.md),
 items `JP-01`…`JP-35`). Two of those items land **here**, both because a second
 consumer clears `AGENTS.md`'s bar for putting something in `PictKit`:
 
@@ -42,11 +42,15 @@ consumes JP-13). Relative to the LP list, JP-13 *is* LP-24a and inherits its slo
 JP-12 is new scope with no LP number, and deliberately so — the LP sequence is the
 TopDrawer port's, and giving this a number in it (LP-24b is already TopDrawer's
 icon-ladder PR) would collide. Whichever plan reaches Part 3 first should land JP-12;
-the other then depends on it rather than writing a private copy.
+the other then depends on it rather than writing a private copy. When JP-12 lands,
+revisit TopDrawer's LP-19 so it consumes the shared parser instead of the private
+copy it currently schedules.
 
 Keep JP-12 small — an entry value type, an index, and a lookup. No preferences, no
 UI, no launching: it is a public surface and therefore a compatibility commitment
 across three release cadences.
+
+## Background
 
 Background for every choice: this repo's [`linux-port.md`](linux-port.md) (the
 Pict-specific research), Jetty's
