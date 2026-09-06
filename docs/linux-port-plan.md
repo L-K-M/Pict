@@ -40,7 +40,7 @@ into the LP table above: both are in its Part 3, after the `JettyCore` extractio
 (JP-01…JP-11) and before the Linux daemon needs them (JP-20 consumes JP-12; JP-21
 consumes JP-13). Relative to the LP list, JP-13 *is* LP-24a and inherits its slot;
 JP-12 is new scope with no LP number, and deliberately so — the LP sequence is the
-Top Drawer port's, and giving this a number in it (LP-24b is already TopDrawer's
+TopDrawer port's, and giving this a number in it (LP-24b is already TopDrawer's
 icon-ladder PR) would collide. Whichever plan reaches Part 3 first should land JP-12;
 the other then depends on it rather than writing a private copy.
 
