@@ -27,13 +27,20 @@ The plan items that land here, in order:
 [Jetty](https://github.com/L-K-M/Jetty) — the third app that reads this store — is
 being ported to Ubuntu too, under its own plan
 ([Jetty's `docs/linux-port-plan.md`](https://github.com/L-K-M/Jetty/blob/main/docs/linux-port-plan.md),
-items `JP-01`…`JP-35`). Two of those items land **here**, both because a second
-consumer clears `AGENTS.md`'s bar for putting something in `PictKit`:
+items `JP-01`…`JP-35`). Two of those items land **here**: JP-12 because a second
+consumer clears `AGENTS.md`'s bar for putting it in `PictKit`, and JP-13 because it
+*is* LP-24a above — already planned to land here — for which Jetty is simply a second
+reason:
 
 | Item | What lands in Pict |
 |---|---|
-| JP-12 | `DesktopEntry` parser + `DesktopEntryIndex` in `Sources/PictKit/Store/` — the spec-correct read of `.desktop` files (XDG + snap + Flatpak dirs, ID dedupe, `NoDisplay`/`OnlyShowIn`/`TryExec`, the locale ladder, `Exec` field codes). Jetty needs it for its dock items and command bar, TopDrawer's LP-19 currently plans a private copy, and the shared parser lets this repo's own `DesktopOverrideSync` drop the best-effort desktop-ID guess in its private `overrideFilename(forSystemPath:)` |
-| JP-13 | The same work as **LP-24a** above (`ArtworkProviding` via icon-theme lookup). Jetty is a second reason to land it: rung 4 of its icon ladder is `NSWorkspace.icon(forFile:)`, whose Linux analogue is exactly this lookup |
+| JP-12 | `DesktopEntry` parser + `DesktopEntryIndex` in `Sources/PictKit/Store/` — the spec-correct read of `.desktop` files (XDG + snap + Flatpak dirs, ID dedupe, `NoDisplay`/`OnlyShowIn`/`TryExec`, the locale ladder, `Exec` field codes) |
+| JP-13 | `ArtworkProviding` via icon-theme lookup — the same work as **LP-24a**. Jetty's reason: rung 4 of its icon ladder is `NSWorkspace.icon(forFile:)`, whose Linux analogue is exactly this lookup |
+
+JP-12 has three consumers, which is what earns it a place in the library: Jetty's dock
+items and command bar, TopDrawer's LP-19 (see the sequencing note below), and this
+repo's own `DesktopOverrideSync`, which can then drop the best-effort desktop-ID guess
+in its private `overrideFilename(forSystemPath:)`.
 
 **Where these sit in the order.** They are sequenced by Jetty's plan, not interleaved
 into the LP table above: both are in its Part 3, after the `JettyCore` extraction
@@ -52,7 +59,7 @@ across three release cadences.
 
 ## Background
 
-Background for every choice: this repo's [`linux-port.md`](linux-port.md) (the
+Every choice here draws on three research sets: this repo's [`linux-port.md`](linux-port.md) (the
 Pict-specific research), Jetty's
 [`docs/linux-port.md`](https://github.com/L-K-M/Jetty/blob/main/docs/linux-port.md),
 and the TopDrawer repo's `docs/linux-port/` research set.
