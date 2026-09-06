@@ -32,7 +32,7 @@ consumer clears `AGENTS.md`'s bar for putting something in `PictKit`:
 
 | Item | What lands in Pict |
 |---|---|
-| JP-12 | `DesktopEntry` parser + `DesktopEntryIndex` in `Sources/PictKit/Store/` — the spec-correct read of `.desktop` files (XDG + snap + Flatpak dirs, ID dedupe, `NoDisplay`/`OnlyShowIn`/`TryExec`, the locale ladder, `Exec` field codes). Jetty needs it for its dock items and command bar, TopDrawer's LP-19 currently plans a private copy, and it retires `DesktopOverrideSync.overrideFilename(forSystemPath:)`'s documented best-effort desktop-ID guess |
+| JP-12 | `DesktopEntry` parser + `DesktopEntryIndex` in `Sources/PictKit/Store/` — the spec-correct read of `.desktop` files (XDG + snap + Flatpak dirs, ID dedupe, `NoDisplay`/`OnlyShowIn`/`TryExec`, the locale ladder, `Exec` field codes). Jetty needs it for its dock items and command bar, TopDrawer's LP-19 currently plans a private copy, and the shared parser lets this repo's own `DesktopOverrideSync` drop the best-effort desktop-ID guess in its private `overrideFilename(forSystemPath:)` |
 | JP-13 | The same work as **LP-24a** above (`ArtworkProviding` via icon-theme lookup). Jetty is a second reason to land it: rung 4 of its icon ladder is `NSWorkspace.icon(forFile:)`, whose Linux analogue is exactly this lookup |
 
 **Where these sit in the order.** They are sequenced by Jetty's plan, not interleaved
