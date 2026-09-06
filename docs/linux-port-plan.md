@@ -22,5 +22,24 @@ The plan items that land here, in order:
 | LP-32 | Debian packaging for `pict` |
 | LP-33–36 | The GTK editor app: shell, SVG ingestion + local sets, remote sets + Iconify, WebKitGTK web picker |
 
+## The Jetty port's items
+
+[Jetty](https://github.com/L-K-M/Jetty) — the third app that reads this store — is
+being ported to Ubuntu too, under its own plan
+([`docs/linux-port-plan.md`](https://github.com/L-K-M/Jetty/blob/main/docs/linux-port-plan.md),
+items `JP-01`…`JP-35`). Two of those items land **here**, both because a second
+consumer clears `AGENTS.md`'s bar for putting something in `PictKit`:
+
+| Item | What lands in Pict |
+|---|---|
+| JP-12 | `DesktopEntry` parser + `DesktopEntryIndex` in `Sources/PictKit/Store/` — the spec-correct read of `.desktop` files (XDG + snap + Flatpak dirs, ID dedupe, `NoDisplay`/`OnlyShowIn`/`TryExec`, the locale ladder, `Exec` field codes). Jetty needs it for its dock items and command bar, TopDrawer's LP-19 currently plans a private copy, and it retires `DesktopOverrideSync.overrideFilename(forSystemPath:)`'s documented best-effort desktop-ID guess |
+| JP-13 | The same work as **LP-24a** above (`ArtworkProviding` via icon-theme lookup). Jetty is a second reason to land it: rung 4 of its icon ladder is `NSWorkspace.icon(forFile:)`, whose Linux analogue is exactly this lookup |
+
+Keep JP-12 small — an entry value type, an index, and a lookup. No preferences, no
+UI, no launching: it is a public surface and therefore a compatibility commitment
+across three release cadences.
+
 Background for every choice: this repo's [`linux-port.md`](linux-port.md) (the
-Pict-specific research) and the TopDrawer repo's `docs/linux-port/` research set.
+Pict-specific research), Jetty's
+[`docs/linux-port.md`](https://github.com/L-K-M/Jetty/blob/main/docs/linux-port.md),
+and the TopDrawer repo's `docs/linux-port/` research set.
