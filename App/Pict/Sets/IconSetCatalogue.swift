@@ -112,7 +112,7 @@ enum IconSetCatalogue {
         name: "Conflux",
         summary: "A young, deliberately neutral set: about ninety branded app icons "
             + "in freeform shapes, drawn from Papirus, Kora, MoreWaita and others "
-            + "besides its own. The thinnest coverage here.",
+            + "besides its own. The fewest app icons of the full-colour sets here.",
         owner: "MoshiurRahmanAdib",
         repository: "Conflux-Icon-Theme",
         branch: "main",
