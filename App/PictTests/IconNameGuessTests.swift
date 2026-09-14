@@ -142,6 +142,50 @@ final class IconNameGuessTests: XCTestCase {
         XCTAssertEqual(matches.first?.confidence, .prefix)
     }
 
+    /// Conflux's house style is names the guesser would never produce:
+    /// `intellij_idea.svg`, `org.gnome.Nautilus.svg`. Spellings and aliases are
+    /// normalised; matching is where the two spellings of one idea meet.
+    func testAThemesOwnPunctuationStillMatches() {
+        let matches = IconNameGuess.matches(appName: "IntelliJ IDEA",
+                                            bundleIdentifier: "com.jetbrains.intellij",
+                                            in: ["intellij_idea"])
+        XCTAssertEqual(matches.first?.iconName, "intellij_idea")
+        XCTAssertEqual(matches.first?.confidence, .known)
+    }
+
+    /// A reverse-DNS name answers for its last component — `org.gnome.Nautilus`
+    /// is how a theme spells Nautilus — but at the weak tier: the tail being the
+    /// app's name is not the icon's name being it, so a bulk apply must skip it.
+    func testAReverseDNSNameAnswersForItsTail() {
+        let matches = IconNameGuess.matches(appName: "Nautilus",
+                                            bundleIdentifier: "com.example.Nautilus",
+                                            in: ["org.gnome.Nautilus"])
+        XCTAssertEqual(matches.first?.iconName, "org.gnome.Nautilus")
+        XCTAssertEqual(matches.first?.confidence, .related)
+    }
+
+    /// The identifier spelled whole is a different case from a tail: freedesktop
+    /// names an app's icon after its app-id, so `org.localsend.localsend_app`
+    /// *is* this icon's name and matches at full strength — which is what lets a
+    /// bulk apply act on it.
+    func testAnIconNamedAfterTheBundleIdentifierIsExact() {
+        let matches = IconNameGuess.matches(appName: "LocalSend",
+                                            bundleIdentifier: "org.localsend.localsend_app",
+                                            in: ["org.localsend.localsend_app"])
+        XCTAssertEqual(matches.first?.iconName, "org.localsend.localsend_app")
+        XCTAssertEqual(matches.first?.confidence, .exact)
+    }
+
+    /// A CamelCase tail keeps no separator, so a two-word app name meets it with
+    /// its own hyphens stripped too — `org.gnome.TextEditor` for "Text Editor".
+    func testACamelCaseReverseDNSTailStillAnswers() {
+        let matches = IconNameGuess.matches(appName: "Text Editor",
+                                            bundleIdentifier: nil,
+                                            in: ["org.gnome.TextEditor"])
+        XCTAssertEqual(matches.first?.iconName, "org.gnome.TextEditor")
+        XCTAssertEqual(matches.first?.confidence, .related)
+    }
+
     /// The weakest tier matches on a word the two names share, which for short
     /// words would drag in half a theme — so it takes only words of substance.
     ///

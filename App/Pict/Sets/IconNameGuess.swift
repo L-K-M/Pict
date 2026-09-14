@@ -116,29 +116,65 @@ enum IconNameGuess {
             best[iconName] = confidence
         }
 
+        // Spellings and aliases are written in normalised form; icon names are
+        // whatever the theme called the file, which is not always that — Conflux
+        // ships `intellij_idea.svg` and `org.gnome.Nautilus.svg`. Indexing the
+        // names by their normalised form is where the two spellings of one idea
+        // meet, while a match still produces the raw name, which is the file.
+        var byNormalisedName: [String: [String]] = [:]
+        // A reverse-DNS name also answers for its last component —
+        // `org.gnome.Ptyxis` is how a theme spells Ptyxis. Kept out of the
+        // full-name index so it can be offered weaker: the tail being the app's
+        // name is not the icon's name being it.
+        var byTail: [String: [String]] = [:]
+        for name in iconNames {
+            byNormalisedName[normalised(name), default: []].append(name)
+            if let dot = name.lastIndex(of: ".") {
+                // Tails are keyed with separators stripped outright — the raw
+                // tail can carry capitals (`org.gnome.TextEditor`) or its own
+                // underscores (`localsend_app`), and a spelling like
+                // `text-editor` has to reach it regardless of which side the
+                // separator fell on.
+                let tail = normalised(String(name[name.index(after: dot)...]))
+                    .replacingOccurrences(of: "-", with: "")
+                if !tail.isEmpty { byTail[tail, default: []].append(name) }
+            }
+        }
+
         let spellings = candidates(appName: appName, bundleIdentifier: bundleIdentifier)
 
+        // The freedesktop convention names an app's icon after its app-id, so a
+        // theme icon that *is* the identifier is the icon itself rather than a
+        // tail of one — full strength, which bulk apply may then act on.
+        if let bundleIdentifier, !bundleIdentifier.contains("/") {
+            for iconName in byNormalisedName[normalised(bundleIdentifier)] ?? [] {
+                offer(iconName, .exact)
+            }
+        }
+
         for alias in aliases(appName: appName, bundleIdentifier: bundleIdentifier) {
-            offer(alias, .known)
+            for iconName in byNormalisedName[alias] ?? [] { offer(iconName, .known) }
         }
         for spelling in spellings {
-            offer(spelling, .exact)
+            for iconName in byNormalisedName[spelling] ?? [] { offer(iconName, .exact) }
+            let squashed = spelling.replacingOccurrences(of: "-", with: "")
+            for iconName in byTail[squashed] ?? [] { offer(iconName, .related) }
         }
 
         // Word-boundary relations, which is where "Docker Desktop" finds `docker`
         // without the alias table having to know about it.
         for spelling in spellings where !spelling.isEmpty {
-            for iconName in iconNames {
-                if iconName.hasPrefix(spelling + "-") || spelling.hasPrefix(iconName + "-") {
-                    offer(iconName, .prefix)
+            for (name, raws) in byNormalisedName {
+                if name.hasPrefix(spelling + "-") || spelling.hasPrefix(name + "-") {
+                    for iconName in raws { offer(iconName, .prefix) }
                 }
             }
         }
 
         let words = Set(spellings.flatMap { $0.split(separator: "-").map(String.init) })
             .filter { $0.count >= 4 }
-        for word in words where iconNames.contains(word) {
-            offer(word, .related)
+        for word in words {
+            for iconName in byNormalisedName[word] ?? [] { offer(iconName, .related) }
         }
 
         return best

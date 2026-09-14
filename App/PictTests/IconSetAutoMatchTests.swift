@@ -52,6 +52,34 @@ final class IconSetAutoMatchTests: XCTestCase {
                                                      in: theme))
     }
 
+    /// `org.gnome.Nautilus` is how a theme spells Nautilus, and the picker will
+    /// offer it — but a tail is not the icon's name, so bulk doesn't act on it.
+    func testDoesNotApplyAReverseDNSTail() {
+        XCTAssertNil(IconSetAutoMatch.confidentMatch(appName: "Nautilus",
+                                                     bundleIdentifier: "com.example.Nautilus",
+                                                     in: ["org.gnome.Nautilus"]))
+    }
+
+    /// The identifier spelled whole is different: freedesktop names an app's
+    /// icon after its app-id, so `org.localsend.localsend_app` is the icon's
+    /// name exactly and bulk may act on it.
+    func testAppliesAnIconNamedAfterTheBundleIdentifier() {
+        XCTAssertEqual(IconSetAutoMatch.confidentMatch(appName: "LocalSend",
+                                                       bundleIdentifier: "org.localsend.localsend_app",
+                                                       in: ["org.localsend.localsend_app"]),
+                       "org.localsend.localsend_app")
+    }
+
+    /// A ref- or path-shaped identifier is not an app-id, and no icon is named
+    /// after one — so it must never reach the exact tier, even though the icon
+    /// it points at carries the identifier as a component.
+    func testDoesNotApplyForARefShapedIdentifier() {
+        XCTAssertNil(IconSetAutoMatch.confidentMatch(
+            appName: "LocalSend",
+            bundleIdentifier: "app/org.localsend.localsend_app/x86_64/stable",
+            in: ["org.localsend.localsend_app"]))
+    }
+
     func testAppliesNothingWhenTheSetHasNothing() {
         XCTAssertNil(IconSetAutoMatch.confidentMatch(appName: "Pict",
                                                      bundleIdentifier: "ch.lkmc.Pict",

@@ -9,27 +9,32 @@ import Foundation
 /// rather than shipping as a set that silently has nothing in it
 /// (`IconSetInstaller` fails when a glob matches no files).
 ///
-/// **All five the design note named, and they are not equivalent.** The word "icon
-/// theme" covers three quite different things here, which is why every row carries
-/// a `summary` and why the order below is the order the picker offers them:
+/// **The five the design note named, plus Conflux — and they are not equivalent.**
+/// The word "icon theme" covers quite different things here, which is why every
+/// row carries a `summary` and why the order below is the order the picker offers
+/// them:
 ///
 /// | | |
 /// |---|---|
 /// | Papirus, Tela | thousands of branded application logos — Firefox, Slack, Docker |
 /// | Numix Circle | the same idea, drawn as flat discs |
 /// | Breeze | ~200 app icons, nearly all of them KDE's own applications |
+/// | Conflux | ~90 branded app icons in freeform shapes, drawn from several sets plus originals |
 /// | Adwaita | no colour application icons at all — 16 px monochrome glyphs under generic freedesktop names |
 ///
 /// Measured, not assumed: against a sample of eighteen common desktop applications
 /// Papirus answers for sixteen, Numix Circle seventeen, Tela fifteen, and Breeze
 /// none — while answering for six of eight KDE applications. Adwaita's `master` has
 /// no full-colour `apps` directory whatsoever; its application-shaped icons are
-/// `symbolic/legacy`, drawn at 16 px in a single grey.
+/// `symbolic/legacy`, drawn at 16 px in a single grey. Conflux's count is a
+/// directory listing of `apps/scalable`, the only place it keeps app icons.
 ///
-/// The two weak ones are still here because a set that covers your case beats a set
+/// The thin ones are still here because a set that covers your case beats a set
 /// that covers the average one: Krita and Kdenlive are cross-platform and Breeze
-/// draws them, and Adwaita is the right answer for anyone who wants a uniform
-/// monochrome row. The `summary` is what keeps that a choice rather than a surprise.
+/// draws them, Adwaita is the right answer for anyone who wants a uniform
+/// monochrome row, and Conflux redraws to no fixed shape, so the apps it misses
+/// sit unremarked next to the ones it drew. The `summary` is what keeps that a
+/// choice rather than a surprise.
 enum IconSetCatalogue {
 
     static let papirus = IconSet(
@@ -102,6 +107,28 @@ enum IconSetCatalogue {
         archiveGlob: "*/icons/apps/48/*.svg",
         strippedComponents: 4)
 
+    static let conflux = IconSet(
+        id: "conflux",
+        name: "Conflux",
+        summary: "A young, deliberately neutral set: about ninety branded app icons "
+            + "in freeform shapes, drawn from Papirus, Kora, MoreWaita and others "
+            + "besides its own. The fewest app icons of the full-colour sets here.",
+        owner: "MoshiurRahmanAdib",
+        repository: "Conflux-Icon-Theme",
+        branch: "main",
+        license: "GPL-3.0",
+        licenseURL: URL(string: "https://www.gnu.org/licenses/gpl-3.0.html"),
+        homepage: URL(string: "https://github.com/MoshiurRahmanAdib/Conflux-Icon-Theme"),
+        credit: nil,
+        // `Conflux-Icon-Theme-main/apps/scalable/org.gnome.Nautilus.svg` →
+        // `org.gnome.Nautilus.svg`. Every app icon lives in that one directory;
+        // `apps@2x` beside it is a symlink back to `apps`, which this glob does
+        // not match. Conflux is also the set that made the guesser and the ranker
+        // normalise icon names before comparing: dots, underscores and capitals
+        // are its house style, and `nautilus` still has to reach them.
+        archiveGlob: "*/apps/scalable/*.svg",
+        strippedComponents: 3)
+
     static let adwaita = IconSet(
         id: "adwaita",
         name: "Adwaita",
@@ -127,7 +154,7 @@ enum IconSetCatalogue {
     /// Everything Pict can install, in the order the picker offers them — broadest
     /// coverage first, so the set most likely to have the icon is the one already
     /// selected when the sheet opens.
-    static let all: [IconSet] = [papirus, tela, numixCircle, breeze, adwaita]
+    static let all: [IconSet] = [papirus, tela, numixCircle, breeze, conflux, adwaita]
 
     static func set(withID id: String) -> IconSet? {
         all.first { $0.id == id }
