@@ -70,6 +70,16 @@ final class IconSetAutoMatchTests: XCTestCase {
                        "org.localsend.localsend_app")
     }
 
+    /// A ref- or path-shaped identifier is not an app-id, and no icon is named
+    /// after one — so it must never reach the exact tier, even though the icon
+    /// it points at carries the identifier as a component.
+    func testDoesNotApplyForARefShapedIdentifier() {
+        XCTAssertNil(IconSetAutoMatch.confidentMatch(
+            appName: "LocalSend",
+            bundleIdentifier: "app/org.localsend.localsend_app/x86_64/stable",
+            in: ["org.localsend.localsend_app"]))
+    }
+
     func testAppliesNothingWhenTheSetHasNothing() {
         XCTAssertNil(IconSetAutoMatch.confidentMatch(appName: "Pict",
                                                      bundleIdentifier: "ch.lkmc.Pict",
