@@ -158,9 +158,31 @@ final class IconNameGuessTests: XCTestCase {
     /// app's name is not the icon's name being it, so a bulk apply must skip it.
     func testAReverseDNSNameAnswersForItsTail() {
         let matches = IconNameGuess.matches(appName: "Nautilus",
-                                            bundleIdentifier: "org.gnome.Nautilus",
+                                            bundleIdentifier: "com.example.Nautilus",
                                             in: ["org.gnome.Nautilus"])
         XCTAssertEqual(matches.first?.iconName, "org.gnome.Nautilus")
+        XCTAssertEqual(matches.first?.confidence, .related)
+    }
+
+    /// The identifier spelled whole is a different case from a tail: freedesktop
+    /// names an app's icon after its app-id, so `org.localsend.localsend_app`
+    /// *is* this icon's name and matches at full strength — which is what lets a
+    /// bulk apply act on it.
+    func testAnIconNamedAfterTheBundleIdentifierIsExact() {
+        let matches = IconNameGuess.matches(appName: "LocalSend",
+                                            bundleIdentifier: "org.localsend.localsend_app",
+                                            in: ["org.localsend.localsend_app"])
+        XCTAssertEqual(matches.first?.iconName, "org.localsend.localsend_app")
+        XCTAssertEqual(matches.first?.confidence, .exact)
+    }
+
+    /// A CamelCase tail keeps no separator, so a two-word app name meets it with
+    /// its own hyphens stripped too — `org.gnome.TextEditor` for "Text Editor".
+    func testACamelCaseReverseDNSTailStillAnswers() {
+        let matches = IconNameGuess.matches(appName: "Text Editor",
+                                            bundleIdentifier: nil,
+                                            in: ["org.gnome.TextEditor"])
+        XCTAssertEqual(matches.first?.iconName, "org.gnome.TextEditor")
         XCTAssertEqual(matches.first?.confidence, .related)
     }
 

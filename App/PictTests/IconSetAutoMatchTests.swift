@@ -56,8 +56,18 @@ final class IconSetAutoMatchTests: XCTestCase {
     /// offer it — but a tail is not the icon's name, so bulk doesn't act on it.
     func testDoesNotApplyAReverseDNSTail() {
         XCTAssertNil(IconSetAutoMatch.confidentMatch(appName: "Nautilus",
-                                                     bundleIdentifier: "org.gnome.Nautilus",
+                                                     bundleIdentifier: "com.example.Nautilus",
                                                      in: ["org.gnome.Nautilus"]))
+    }
+
+    /// The identifier spelled whole is different: freedesktop names an app's
+    /// icon after its app-id, so `org.localsend.localsend_app` is the icon's
+    /// name exactly and bulk may act on it.
+    func testAppliesAnIconNamedAfterTheBundleIdentifier() {
+        XCTAssertEqual(IconSetAutoMatch.confidentMatch(appName: "LocalSend",
+                                                       bundleIdentifier: "org.localsend.localsend_app",
+                                                       in: ["org.localsend.localsend_app"]),
+                       "org.localsend.localsend_app")
     }
 
     func testAppliesNothingWhenTheSetHasNothing() {

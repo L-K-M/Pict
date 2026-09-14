@@ -130,19 +130,35 @@ enum IconNameGuess {
         for name in iconNames {
             byNormalisedName[normalised(name), default: []].append(name)
             if let dot = name.lastIndex(of: ".") {
+                // Tails are keyed with separators stripped outright — the raw
+                // tail can carry capitals (`org.gnome.TextEditor`) or its own
+                // underscores (`localsend_app`), and a spelling like
+                // `text-editor` has to reach it regardless of which side the
+                // separator fell on.
                 let tail = normalised(String(name[name.index(after: dot)...]))
+                    .replacingOccurrences(of: "-", with: "")
                 if !tail.isEmpty { byTail[tail, default: []].append(name) }
             }
         }
 
         let spellings = candidates(appName: appName, bundleIdentifier: bundleIdentifier)
 
+        // The freedesktop convention names an app's icon after its app-id, so a
+        // theme icon that *is* the identifier is the icon itself rather than a
+        // tail of one — full strength, which bulk apply may then act on.
+        if let bundleIdentifier, !bundleIdentifier.contains("/") {
+            for iconName in byNormalisedName[normalised(bundleIdentifier)] ?? [] {
+                offer(iconName, .exact)
+            }
+        }
+
         for alias in aliases(appName: appName, bundleIdentifier: bundleIdentifier) {
             for iconName in byNormalisedName[alias] ?? [] { offer(iconName, .known) }
         }
         for spelling in spellings {
             for iconName in byNormalisedName[spelling] ?? [] { offer(iconName, .exact) }
-            for iconName in byTail[spelling] ?? [] { offer(iconName, .related) }
+            let squashed = spelling.replacingOccurrences(of: "-", with: "")
+            for iconName in byTail[squashed] ?? [] { offer(iconName, .related) }
         }
 
         // Word-boundary relations, which is where "Docker Desktop" finds `docker`
