@@ -113,6 +113,18 @@ final class IconSetProviderTests: XCTestCase {
                        "google-chrome")
     }
 
+    /// Conflux names files `org.gnome.Nautilus.svg` and `intellij_idea.svg` — the
+    /// theme's own spelling, not the normalised one the query arrives in.
+    /// Scoring runs on the normalised form so a typed query still reaches them,
+    /// while what comes back is the raw name, which is the file.
+    func testNamesInAThemesOwnSpellingStillRank() {
+        let confluxNames: Set<String> = ["org.gnome.Nautilus", "intellij_idea", "firefox"]
+        XCTAssertEqual(IconSetProvider.ranked(query: "nautilus", in: confluxNames, limit: 5),
+                       ["org.gnome.Nautilus"])
+        XCTAssertEqual(IconSetProvider.ranked(query: "intellij", in: confluxNames, limit: 5),
+                       ["intellij_idea"])
+    }
+
     func testAnEmptyQueryMatchesNothing() {
         XCTAssertTrue(IconSetProvider.ranked(query: "   ", in: names, limit: 5).isEmpty)
         XCTAssertTrue(IconSetProvider.ranked(query: "firefox", in: names, limit: 0).isEmpty)

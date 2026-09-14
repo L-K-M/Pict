@@ -47,20 +47,26 @@ struct IconSetProvider: IconSearchProvider {
     /// Ranks `iconNames` against a typed query. Pure, so the ordering is testable
     /// without a theme on disk.
     ///
-    /// Three tiers and no fuzziness. A theme's names are already normalised — short,
-    /// lowercase, hyphenated — so substring matching finds what is there, and
-    /// anything cleverer would mostly reorder near-identical names. Ties break on
-    /// length: for `mail`, `mail` should come before `mail-client-list`.
+    /// Three tiers and no fuzziness. Both sides are normalised first, because a
+    /// theme's names are only *mostly* normalised — Conflux ships
+    /// `org.gnome.Nautilus.svg` and `intellij_idea.svg` — and substring matching
+    /// finds what is there, while anything cleverer would mostly reorder
+    /// near-identical names. Ties break on length: for `mail`, `mail` should come
+    /// before `mail-client-list`.
     static func ranked(query: String, in iconNames: Set<String>, limit: Int) -> [String] {
         let needle = IconNameGuess.normalised(query)
         guard !needle.isEmpty, limit > 0 else { return [] }
 
         var scored: [(name: String, score: Int)] = []
         for name in iconNames {
+            // `name` stays raw — it is what `result(forIconName:)` resolves to a
+            // file — and only the comparison runs on the normalised form. For a
+            // theme already written that way the normalising is the identity.
+            let key = IconNameGuess.normalised(name)
             let score: Int
-            if name == needle { score = 3 }
-            else if name.hasPrefix(needle) { score = 2 }
-            else if name.contains(needle) { score = 1 }
+            if key == needle { score = 3 }
+            else if key.hasPrefix(needle) { score = 2 }
+            else if key.contains(needle) { score = 1 }
             else { continue }
             scored.append((name, score))
         }

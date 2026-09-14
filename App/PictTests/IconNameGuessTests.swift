@@ -142,6 +142,28 @@ final class IconNameGuessTests: XCTestCase {
         XCTAssertEqual(matches.first?.confidence, .prefix)
     }
 
+    /// Conflux's house style is names the guesser would never produce:
+    /// `intellij_idea.svg`, `org.gnome.Nautilus.svg`. Spellings and aliases are
+    /// normalised; matching is where the two spellings of one idea meet.
+    func testAThemesOwnPunctuationStillMatches() {
+        let matches = IconNameGuess.matches(appName: "IntelliJ IDEA",
+                                            bundleIdentifier: "com.jetbrains.intellij",
+                                            in: ["intellij_idea"])
+        XCTAssertEqual(matches.first?.iconName, "intellij_idea")
+        XCTAssertEqual(matches.first?.confidence, .known)
+    }
+
+    /// A reverse-DNS name answers for its last component — `org.gnome.Nautilus`
+    /// is how a theme spells Nautilus — but at the weak tier: the tail being the
+    /// app's name is not the icon's name being it, so a bulk apply must skip it.
+    func testAReverseDNSNameAnswersForItsTail() {
+        let matches = IconNameGuess.matches(appName: "Nautilus",
+                                            bundleIdentifier: "org.gnome.Nautilus",
+                                            in: ["org.gnome.Nautilus"])
+        XCTAssertEqual(matches.first?.iconName, "org.gnome.Nautilus")
+        XCTAssertEqual(matches.first?.confidence, .related)
+    }
+
     /// The weakest tier matches on a word the two names share, which for short
     /// words would drag in half a theme — so it takes only words of substance.
     ///

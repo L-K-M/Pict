@@ -52,6 +52,14 @@ final class IconSetAutoMatchTests: XCTestCase {
                                                      in: theme))
     }
 
+    /// `org.gnome.Nautilus` is how a theme spells Nautilus, and the picker will
+    /// offer it — but a tail is not the icon's name, so bulk doesn't act on it.
+    func testDoesNotApplyAReverseDNSTail() {
+        XCTAssertNil(IconSetAutoMatch.confidentMatch(appName: "Nautilus",
+                                                     bundleIdentifier: "org.gnome.Nautilus",
+                                                     in: ["org.gnome.Nautilus"]))
+    }
+
     func testAppliesNothingWhenTheSetHasNothing() {
         XCTAssertNil(IconSetAutoMatch.confidentMatch(appName: "Pict",
                                                      bundleIdentifier: "ch.lkmc.Pict",
