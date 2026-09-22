@@ -31,7 +31,7 @@ jobs:
     # Linux Foundation these files are ported against.
     container: swift:6.3-noble
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # SwiftPM shells out to git to resolve packages; inside the container the
       # checkout is owned by a different uid than the one running the build, which
