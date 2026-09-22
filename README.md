@@ -1,5 +1,8 @@
 # Pict
 
+> [!IMPORTANT]
+> LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
+
 **One icon change, everywhere.** Pict is the shared icon store behind
 [Zap](https://github.com/L-K-M/Zap) (a ⌘-Tab switcher),
 [Jetty](https://github.com/L-K-M/Jetty) (a Dock replacement) and
