@@ -25,7 +25,7 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 45   # don't let a wedged xcodebuild stall a release for 6h
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
