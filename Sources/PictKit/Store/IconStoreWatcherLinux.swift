@@ -47,7 +47,7 @@ public final class IconStoreWatcher {
 
     private let directory: URL
     private let onChange: () -> Void
-    private let queue = DispatchQueue(label: "com.pict.store-watcher", qos: .utility)
+    private let queue = DispatchQueue(label: "ch.lkmc.Pict.store-watcher", qos: .utility)
     private let fileManager = FileManager.default
 
     // All of the following are touched only on `queue`.

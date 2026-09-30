@@ -9,9 +9,9 @@ public enum IconStoreLocation {
     /// Not inside any one app's folder, which is the whole point — a store under
     /// `Application Support/Zap/` is Zap's, and three apps writing into another app's
     /// directory is a worse arrangement than a neutral one. The three existing bundle
-    /// identifiers (`com.zapapp.Zap`, `com.jettyapp.Jetty`, `com.macdring.MacDring`)
-    /// share no reverse-DNS root, so there was no prefix to inherit and a name had to
-    /// be invented.
+    /// identifiers (`ch.lkmc.Zap`, `ch.lkmc.Jetty`, `ch.lkmc.MacDring`) share the
+    /// `ch.lkmc` root as of the identifier cleanup, but the folder keeps its invented
+    /// name — it predates that alignment and renaming it would orphan existing stores.
     public static let directoryName = "Pict"
 
     /// `~/Library/Application Support/Pict`, falling back to a temporary directory if
