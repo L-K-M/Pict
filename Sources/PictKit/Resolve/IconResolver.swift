@@ -83,7 +83,7 @@ public final class IconResolver {
     private var _onIconsResolved: (() -> Void)?
     private var notifyScheduled = false
 
-    private let queue = DispatchQueue(label: "com.pict.icon-resolver", qos: .utility)
+    private let queue = DispatchQueue(label: "ch.lkmc.Pict.icon-resolver", qos: .utility)
     private let lock = NSLock()
 
     /// A resolved icon, or a resolved *absence* of one — distinguishing "we looked

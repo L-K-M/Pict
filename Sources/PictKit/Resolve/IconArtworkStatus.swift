@@ -49,7 +49,7 @@ public struct IconArtworkStatus: Equatable {
 
     /// Where the queue for batch description lives. Utility rather than user
     /// initiated: nothing on screen is waiting on it except a caption.
-    private static let queue = DispatchQueue(label: "com.pict.icon-status", qos: .utility)
+    private static let queue = DispatchQueue(label: "ch.lkmc.Pict.icon-status", qos: .utility)
 
     /// Describes one target. Decodes its bundle artwork, so it blocks — call it off
     /// the main thread. The artwork source is behind `ArtworkProviding` so the bundle
