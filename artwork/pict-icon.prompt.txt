@@ -1,19 +1,25 @@
-Initial generation (OpenAI built-in image generator; transparent background):
+Current artwork: opaque square with violet background reaching every edge.
+Keep roughly the outer 20% of every edge expendable; place the beast in the central 60%.
+macOS supplies the final icon mask. Do not bake rounded corners, padding, a frame, or transparency into the source.
 
-Use case: logo-brand
-Asset type: production macOS application icon for Pict, a native icon editor.
-Primary request: Create a beautiful, distinctive icon depicting the historic Pictish beast from the carved symbol stones of Scotland, reinterpreted as an elegant modern sculpted emblem.
-Subject: one complete Pictish beast in clear side profile. Preserve its recognizable ancient anatomy: long down-curving dolphin-like snout, small tucked head, a long swept-back ribbon-like crest from the top of the head, arched elongated body, four short limbs terminating in open spiral scrolls, and a slim curling tail. A small inset eye. Make the pose balanced, graceful, and quietly charming, with no aggressive expression. The silhouette should feel like the historic Pictish symbol.
-Style/medium: beautifully crafted ivory porcelain relief with softly rounded beveled edges, restrained warm pearlescent highlights, gentle depth and a delicate contact shadow. Native macOS icon quality with simple, confident shapes. Favor a bold readable silhouette over tiny ornamental detail.
-Scene/backdrop: rich violet rounded-square icon plate, softly lit with a subtle lavender-to-deep-violet gradient. The plate fills about 96% of the square canvas, with smooth continuous squircle corners and a tiny even transparent exterior margin.
-Composition/framing: square, straight-on orthographic view. One large centered ivory beast occupying about 76% of the width and 70% of the height, all extremities comfortably inside the plate. Generous open spaces within the curled feet so it remains readable at small sizes.
-Lighting/mood: soft studio light from upper left, refined, warm, friendly, quietly magical.
-Constraints: this is the actual icon artwork, not a mockup; no desk, frame, presentation board or surroundings. No text, letters, watermark, added symbols, Celtic knotwork filler, scales, fur, wings, horns, extra characters or objects. No generic winged dragon, no realistic elephant. The area outside the violet squircle must be truly transparent.
-
-Final perimeter cleanup (OpenAI built-in image generator; transparent background):
+Full-bleed correction (OpenAI built-in image generator; opaque background):
 
 Use case: precise-object-edit
-Edit target: the Pict app icon just generated.
-Primary request: Clean up only the transparency and the outer perimeter of this icon for production use.
-Keep the beautiful ivory sculpted Pictish beast, its exact anatomy, silhouette, pose, face, four spiral feet, flowing crest, curled tail, proportions, shadows, materials, placement, and violet gradient completely unchanged. Preserve the same rounded-square violet plate and its existing generous size and soft corners.
-Remove every stray dot, white fleck, blue or purple fringe, disconnected pixel, and debris outside the violet rounded-square plate. All exterior pixels must be perfectly transparent. Give the plate a pristine, smooth, clean antialiased contour and an even transparent margin. The actual icon remains square, straight-on, with no text, mockup or extra objects. Do not add a shadow outside the plate. This is a surgical perimeter cleanup only.
+Asset type: corrected production macOS app icon source artwork.
+Input image: the existing Pict icon is the edit target.
+Primary request: Fix the icon-within-an-icon problem by converting this existing artwork into a fully opaque square image that fills the entire canvas edge to edge. macOS itself will crop the square into the final icon shape.
+
+Preserve the existing beautiful ivory porcelain Pictish beast design, recognizable silhouette, exact four scroll feet, swept-back curling crest, long down-curved snout, small inset eye, curled tail, soft sculpted relief, and restrained contact shadow. Keep its side-facing pose and ivory material.
+Resize and position the entire beast, including every extremity and its contact shadow, inside the CENTRAL 60% of the canvas: approximately x=20% through80%, y=20% through80%. Center the beast in that safe area. About20% of the canvas along EVERY edge is a sacrificial keepout zone that must contain ONLY the violet background gradient, with nothing important to lose under the macOS crop. The beast should be as large and legible as fits within those safety limits.
+
+Replace the entire rounded-square plate and transparent perimeter with ONE CONTINUOUS RICH VIOLET BACKGROUND extending to all four straight square edges and filling all four square corners. Maintain the lavender upper-left light gently blending into deeper violet toward bottom right, but the background must have no contour or boundary inside the image. This is a single flat continuous background plane behind the raised beast.
+Output exactly one SQUARE, fully OPAQUE full-bleed image. Every pixel including every corner is filled with the violet background. NO transparency. NO rounded corners. NO squircle. NO tile or card edges. NO border. NO frame. NO bevel, rim, inset plate, white outer surface, or shadow around an inner rectangle. No icon mockup, system chrome, canvas margin, text, watermark, guide lines or measurements. Only the centered ivory beast and the uninterrupted violet field.
+
+Safe-area adjustment (OpenAI built-in image generator; opaque background):
+
+Use case: precise-object-edit
+Edit target: the fully opaque square violet Pict icon in the reference image.
+Make ONE precise composition change: shrink the ENTIRE ivory Pictish beast and its contact shadow to 70% of their current size, keeping the entire group centered on the square canvas. The current beast spans about82% of the image width; after this edit it must span only about57% of the image width. This leaves approximately21.5% of the canvas empty on its left and right. Do not zoom or crop the canvas to compensate. Do not enlarge the beast after shrinking it.
+All important parts of the beast, including its snout, crest, four curled feet and tail, must sit within the central rectangle from20% to80% of the canvas horizontally AND vertically. Fill the newly empty area with seamless continuation of the existing violet gradient. The entire outer20% on every edge must be uninterrupted violet background only.
+Preserve the exact beast design, pose, proportions, ivory porcelain material, carving details, existing violet color gradient, light direction, and overall square canvas. Only reduce the beast's size and recenter it; do not redesign the animal.
+Keep this a completely OPAQUE edge-to-edge SQUARE with violet in all four corners. No transparent pixels, no rounded corners, no squircle, no card, no plate, no border, no frame, no inset edge, no bevel or rim, no surrounding shadow, no text or guides.
