@@ -1,8 +1,15 @@
 Current artwork: opaque square with violet background reaching every edge.
-Keep roughly the outer 20% of every edge expendable; place the beast in the central 60%.
-macOS supplies the final icon mask. Do not bake rounded corners, padding, a frame, or transparency into the source.
+The beast spans about 80% of the width, with roughly 10% side clearance.
+Keep the complete beast centered and preserve its ivory relief, silhouette, and pose.
+Do not bake rounded corners, padding, a frame, or transparency into the source.
 
-Full-bleed correction (OpenAI built-in image generator; opaque background):
+Selection: reuse the larger full-bleed result from OpenAI's built-in image generator,
+before the later shrink pass. That result measured 82% wide, matching the current
+layout target. The earlier 20% keepout requirement is superseded; do not repeat
+the shrink pass.
+
+Historical source edit prompt (the original 20% instruction did not match the
+generated result and is not the current layout target):
 
 Use case: precise-object-edit
 Asset type: corrected production macOS app icon source artwork.
@@ -14,12 +21,3 @@ Resize and position the entire beast, including every extremity and its contact 
 
 Replace the entire rounded-square plate and transparent perimeter with ONE CONTINUOUS RICH VIOLET BACKGROUND extending to all four straight square edges and filling all four square corners. Maintain the lavender upper-left light gently blending into deeper violet toward bottom right, but the background must have no contour or boundary inside the image. This is a single flat continuous background plane behind the raised beast.
 Output exactly one SQUARE, fully OPAQUE full-bleed image. Every pixel including every corner is filled with the violet background. NO transparency. NO rounded corners. NO squircle. NO tile or card edges. NO border. NO frame. NO bevel, rim, inset plate, white outer surface, or shadow around an inner rectangle. No icon mockup, system chrome, canvas margin, text, watermark, guide lines or measurements. Only the centered ivory beast and the uninterrupted violet field.
-
-Safe-area adjustment (OpenAI built-in image generator; opaque background):
-
-Use case: precise-object-edit
-Edit target: the fully opaque square violet Pict icon in the reference image.
-Make ONE precise composition change: shrink the ENTIRE ivory Pictish beast and its contact shadow to 70% of their current size, keeping the entire group centered on the square canvas. The current beast spans about82% of the image width; after this edit it must span only about57% of the image width. This leaves approximately21.5% of the canvas empty on its left and right. Do not zoom or crop the canvas to compensate. Do not enlarge the beast after shrinking it.
-All important parts of the beast, including its snout, crest, four curled feet and tail, must sit within the central rectangle from20% to80% of the canvas horizontally AND vertically. Fill the newly empty area with seamless continuation of the existing violet gradient. The entire outer20% on every edge must be uninterrupted violet background only.
-Preserve the exact beast design, pose, proportions, ivory porcelain material, carving details, existing violet color gradient, light direction, and overall square canvas. Only reduce the beast's size and recenter it; do not redesign the animal.
-Keep this a completely OPAQUE edge-to-edge SQUARE with violet in all four corners. No transparent pixels, no rounded corners, no squircle, no card, no plate, no border, no frame, no inset edge, no bevel or rim, no surrounding shadow, no text or guides.
