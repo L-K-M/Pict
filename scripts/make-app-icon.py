@@ -7,9 +7,9 @@ The ivory Pictish beast on violet was created with OpenAI's image generator.
 The master and generation prompts live in artwork/. Keep the master outside the
 app's synchronized source group so it is not bundled alongside the icon catalog.
 
-The artwork is a fully opaque square. macOS supplies the icon mask; baking rounded
-transparent corners into the artwork creates an inset tile. Keep roughly 20% of
-each edge as expendable background, with the beast inside the central 60%.
+The artwork is a fully opaque square. macOS 26+ supplies the icon mask; baking
+rounded transparent corners into the artwork creates an inset tile there. The
+centered beast spans about 80% of the width, leaving roughly 10% side clearance.
 
 Requires macOS's built-in sips tool, with no third-party dependencies. The asset
 catalog defines the sizes; its metadata and the app's accent color stay intact.
