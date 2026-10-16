@@ -7,6 +7,10 @@ The ivory Pictish beast on violet was created with OpenAI's image generator.
 The master and generation prompts live in artwork/. Keep the master outside the
 app's synchronized source group so it is not bundled alongside the icon catalog.
 
+The artwork is a fully opaque square. macOS supplies the icon mask; baking rounded
+transparent corners into the artwork creates an inset tile. Keep roughly 20% of
+each edge as expendable background, with the beast inside the central 60%.
+
 Requires macOS's built-in sips tool, with no third-party dependencies. The asset
 catalog defines the sizes; its metadata and the app's accent color stay intact.
 """
@@ -30,7 +34,7 @@ def main():
 
     catalog = json.loads((iconset / "Contents.json").read_text())
     # Resize each distinct pixel size once so equivalent 1x/2x slots are exact
-    # copies. Preserve the generated alpha, including the transparent corners.
+    # copies. Keep the opaque square intact without adding rounding or padding.
     with tempfile.TemporaryDirectory(prefix="pict-app-icon-") as temporary:
         resized = {}
         for entry in catalog["images"]:
