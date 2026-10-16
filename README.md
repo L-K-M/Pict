@@ -11,7 +11,7 @@ editor that fills it.
 
 Give Safari a custom icon once and all three apps draw it.
 
-**Latest release:** v<!-- version -->1.0.0<!-- /version --> · [Download](https://github.com/L-K-M/Pict/releases/latest)
+**Latest release:** v<!-- version -->1.0.1<!-- /version --> · [Download](https://github.com/L-K-M/Pict/releases/latest)
 
 > [!IMPORTANT]
 > LLM Disclosure: this code base was written by or with the help of large language
