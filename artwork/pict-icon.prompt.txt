@@ -1,0 +1,19 @@
+Initial generation (OpenAI built-in image generator; transparent background):
+
+Use case: logo-brand
+Asset type: production macOS application icon for Pict, a native icon editor.
+Primary request: Create a beautiful, distinctive icon depicting the historic Pictish beast from the carved symbol stones of Scotland, reinterpreted as an elegant modern sculpted emblem.
+Subject: one complete Pictish beast in clear side profile. Preserve its recognizable ancient anatomy: long down-curving dolphin-like snout, small tucked head, a long swept-back ribbon-like crest from the top of the head, arched elongated body, four short limbs terminating in open spiral scrolls, and a slim curling tail. A small inset eye. Make the pose balanced, graceful, and quietly charming, with no aggressive expression. The silhouette should feel like the historic Pictish symbol.
+Style/medium: beautifully crafted ivory porcelain relief with softly rounded beveled edges, restrained warm pearlescent highlights, gentle depth and a delicate contact shadow. Native macOS icon quality with simple, confident shapes. Favor a bold readable silhouette over tiny ornamental detail.
+Scene/backdrop: rich violet rounded-square icon plate, softly lit with a subtle lavender-to-deep-violet gradient. The plate fills about 96% of the square canvas, with smooth continuous squircle corners and a tiny even transparent exterior margin.
+Composition/framing: square, straight-on orthographic view. One large centered ivory beast occupying about 76% of the width and 70% of the height, all extremities comfortably inside the plate. Generous open spaces within the curled feet so it remains readable at small sizes.
+Lighting/mood: soft studio light from upper left, refined, warm, friendly, quietly magical.
+Constraints: this is the actual icon artwork, not a mockup; no desk, frame, presentation board or surroundings. No text, letters, watermark, added symbols, Celtic knotwork filler, scales, fur, wings, horns, extra characters or objects. No generic winged dragon, no realistic elephant. The area outside the violet squircle must be truly transparent.
+
+Final perimeter cleanup (OpenAI built-in image generator; transparent background):
+
+Use case: precise-object-edit
+Edit target: the Pict app icon just generated.
+Primary request: Clean up only the transparency and the outer perimeter of this icon for production use.
+Keep the beautiful ivory sculpted Pictish beast, its exact anatomy, silhouette, pose, face, four spiral feet, flowing crest, curled tail, proportions, shadows, materials, placement, and violet gradient completely unchanged. Preserve the same rounded-square violet plate and its existing generous size and soft corners.
+Remove every stray dot, white fleck, blue or purple fringe, disconnected pixel, and debris outside the violet rounded-square plate. All exterior pixels must be perfectly transparent. Give the plate a pristine, smooth, clean antialiased contour and an even transparent margin. The actual icon remains square, straight-on, with no text, mockup or extra objects. Do not add a shadow outside the plate. This is a surgical perimeter cleanup only.
