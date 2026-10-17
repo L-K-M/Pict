@@ -13,6 +13,13 @@ Give Safari a custom icon once and all three apps draw it.
 
 **Latest release:** v<!-- version -->1.0.2<!-- /version --> · [Download](https://github.com/L-K-M/Pict/releases/latest)
 
+The build is ad-hoc signed and not notarized. After moving **Pict** to
+Applications, run:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Pict.app"
+```
+
 > [!IMPORTANT]
 > LLM Disclosure: this code base was written by or with the help of large language
 > models, working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
