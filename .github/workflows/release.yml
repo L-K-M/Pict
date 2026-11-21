@@ -22,7 +22,7 @@ env:
 jobs:
   release:
     name: Build & publish (unsigned)
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45   # don't let a wedged xcodebuild stall a release for 6h
     steps:
       - uses: actions/checkout@v7
@@ -32,7 +32,7 @@ jobs:
         # Must match ci.yml. A release built on a toolchain CI has never used is
         # a build nobody has tested.
         with:
-          xcode-version: '16.2'
+          xcode-version: '16.4'
 
       - name: Install tooling
         run: brew install xcbeautify create-dmg

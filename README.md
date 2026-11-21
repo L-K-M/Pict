@@ -117,7 +117,7 @@ xcodebuild -project App/Pict.xcodeproj -scheme Pict \
   -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
 ```
 
-Requires macOS 13+ and a Swift 5.9 toolchain; CI pins Xcode 16.2.
+Requires macOS 13+ and a Swift 5.9 toolchain; CI pins Xcode 16.4.
 
 ## Releases
 
